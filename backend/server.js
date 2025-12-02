@@ -11,19 +11,62 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Start scheduler saat server start
-scheduler.start();
+// ========== STARTUP FUNCTION ==========
+async function startServer() {
+  try {
+    console.log("🚀 Starting server...\n");
+
+    // 1. Initialize database first
+    console.log("📊 Initializing database...");
+    await db.initializeDatabase();
+    console.log("✅ Database ready\n");
+
+    // 2. Start scheduler
+    console.log("⏰ Starting scheduler...");
+    scheduler.start();
+    console.log("✅ Scheduler ready\n");
+
+    // 3. Start Express server
+    app.listen(PORT, () => {
+      console.log("=".repeat(50));
+      console.log(`✅ Server running on http://localhost:${PORT}`);
+      console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+      console.log(`⏰ Scheduler: Active`);
+      console.log("=".repeat(50) + "\n");
+    });
+  } catch (error) {
+    console.error("❌ Failed to start server:", error.message);
+    console.error("\n💡 Troubleshooting tips:");
+    console.error("   1. Check if PostgreSQL is running");
+    console.error("   2. Verify .env file configuration");
+    console.error("   3. Test connection: node scripts/db-utils.js test");
+    process.exit(1);
+  }
+}
 
 // ========== ENDPOINTS ==========
 
 // Health check
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "OK",
-    message: "Server is running",
-    scheduler: scheduler.getStatus(),
-    timestamp: new Date().toISOString(),
-  });
+app.get("/api/health", async (req, res) => {
+  try {
+    const stats = await db.getStats();
+    res.json({
+      status: "OK",
+      message: "Server is running",
+      scheduler: scheduler.getStatus(),
+      database: {
+        connected: db.isInitialized,
+        stats,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "ERROR",
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 // Submit form LANGSUNG (tanpa schedule)
@@ -73,7 +116,7 @@ app.post("/api/submit-form", async (req, res) => {
   }
 });
 
-// SCHEDULE form submission (BARU!)
+// SCHEDULE form submission
 app.post("/api/schedule-form", async (req, res) => {
   try {
     const { formData, scheduledTime } = req.body;
@@ -108,7 +151,7 @@ app.post("/api/schedule-form", async (req, res) => {
     }
 
     // Tambahkan ke database
-    const job = db.addScheduledJob(formData, scheduledTime);
+    const job = await db.addScheduledJob(formData, scheduledTime);
 
     res.json({
       success: true,
@@ -130,9 +173,9 @@ app.post("/api/schedule-form", async (req, res) => {
 });
 
 // GET semua scheduled jobs
-app.get("/api/jobs", (req, res) => {
+app.get("/api/jobs", async (req, res) => {
   try {
-    const jobs = db.getAllJobs();
+    const jobs = await db.getAllJobs();
     res.json({
       success: true,
       jobs,
@@ -146,9 +189,9 @@ app.get("/api/jobs", (req, res) => {
 });
 
 // GET single job by ID
-app.get("/api/jobs/:jobId", (req, res) => {
+app.get("/api/jobs/:jobId", async (req, res) => {
   try {
-    const job = db.getJobById(req.params.jobId);
+    const job = await db.getJobById(req.params.jobId);
 
     if (!job) {
       return res.status(404).json({
@@ -170,9 +213,9 @@ app.get("/api/jobs/:jobId", (req, res) => {
 });
 
 // CANCEL scheduled job
-app.post("/api/jobs/:jobId/cancel", (req, res) => {
+app.post("/api/jobs/:jobId/cancel", async (req, res) => {
   try {
-    const cancelled = db.cancelJob(req.params.jobId);
+    const cancelled = await db.cancelJob(req.params.jobId);
 
     if (!cancelled) {
       return res.status(404).json({
@@ -194,9 +237,9 @@ app.post("/api/jobs/:jobId/cancel", (req, res) => {
 });
 
 // DELETE job
-app.delete("/api/jobs/:jobId", (req, res) => {
+app.delete("/api/jobs/:jobId", async (req, res) => {
   try {
-    const deleted = db.deleteJob(req.params.jobId);
+    const deleted = await db.deleteJob(req.params.jobId);
 
     if (!deleted) {
       return res.status(404).json({
@@ -217,16 +260,36 @@ app.delete("/api/jobs/:jobId", (req, res) => {
   }
 });
 
+// Manually trigger scheduler (for testing)
+app.post("/api/scheduler/trigger", async (req, res) => {
+  try {
+    await scheduler.triggerProcessing();
+    res.json({
+      success: true,
+      message: "Scheduler triggered manually",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
 // Graceful shutdown
-process.on("SIGINT", () => {
+process.on("SIGINT", async () => {
   console.log("\n⏹️  Shutting down gracefully...");
   scheduler.stop();
+  await db.close();
   process.exit(0);
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`⏰ Scheduler is active`);
+process.on("SIGTERM", async () => {
+  console.log("\n⏹️  Shutting down gracefully...");
+  scheduler.stop();
+  await db.close();
+  process.exit(0);
 });
+
+// Start the server
+startServer();

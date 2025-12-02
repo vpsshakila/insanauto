@@ -1,44 +1,169 @@
 // services/database.js
-const Database = require("better-sqlite3");
-const path = require("path");
+const mongoose = require("mongoose");
+require("dotenv").config();
+
+// Job Schema
+const jobSchema = new mongoose.Schema(
+  {
+    job_id: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    tid: {
+      type: String,
+      required: true,
+    },
+    kondisi_camera: {
+      type: String,
+      required: true,
+      enum: ["Baik", "Problem"],
+    },
+    kondisi_nvr: {
+      type: String,
+      required: true,
+      enum: ["Merekam", "Problem"],
+    },
+    nama: {
+      type: String,
+      required: true,
+    },
+    perusahaan: {
+      type: String,
+      required: true,
+    },
+    no_pegawai: {
+      type: String,
+      required: true,
+    },
+    scheduled_time: {
+      type: Date,
+      required: true,
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: ["pending", "processing", "completed", "failed", "cancelled"],
+      default: "pending",
+      index: true,
+    },
+    executed_at: {
+      type: Date,
+      default: null,
+    },
+    error_message: {
+      type: String,
+      default: null,
+    },
+  },
+  {
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+  }
+);
+
+// Model
+const Job = mongoose.model("Job", jobSchema);
 
 class DatabaseService {
   constructor() {
-    const dbPath = path.join(__dirname, "../data/scheduler.db");
-    this.db = new Database(dbPath);
-    this.initializeDatabase();
+    this.isInitialized = false;
+    this.initPromise = null;
+
+    // Build MongoDB URI
+    const DB_USER = process.env.DB_USER || "admin";
+    const DB_PASSWORD = process.env.DB_PASSWORD || "secret";
+    const DB_HOST = process.env.DB_HOST || "localhost";
+    const DB_PORT = process.env.DB_PORT || 27017;
+    const DB_NAME = process.env.DB_NAME || "form_scheduler";
+
+    // MongoDB URI dengan authentication
+    this.mongoURI = `mongodb://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?authSource=admin`;
   }
 
-  initializeDatabase() {
-    // Tabel untuk scheduled jobs
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS scheduled_jobs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        job_id TEXT UNIQUE NOT NULL,
-        tid TEXT NOT NULL,
-        kondisi_camera TEXT NOT NULL,
-        kondisi_nvr TEXT NOT NULL,
-        nama TEXT NOT NULL,
-        perusahaan TEXT NOT NULL,
-        no_pegawai TEXT NOT NULL,
-        scheduled_time TEXT NOT NULL,
-        status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        executed_at TEXT,
-        error_message TEXT
+  /**
+   * Initialize MongoDB connection
+   */
+  async initializeDatabase() {
+    if (this.isInitialized) {
+      console.log("⚠️  Database already initialized");
+      return;
+    }
+
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    this.initPromise = this._initialize();
+    await this.initPromise;
+    this.isInitialized = true;
+  }
+
+  async _initialize() {
+    try {
+      console.log("🔌 Connecting to MongoDB...");
+      console.log(
+        `   Host: ${process.env.DB_HOST || "localhost"}:${
+          process.env.DB_PORT || 27017
+        }`
       );
+      console.log(`   Database: ${process.env.DB_NAME || "form_scheduler"}`);
+      console.log(`   User: ${process.env.DB_USER || "admin"}`);
 
-      CREATE INDEX IF NOT EXISTS idx_status ON scheduled_jobs(status);
-      CREATE INDEX IF NOT EXISTS idx_scheduled_time ON scheduled_jobs(scheduled_time);
-    `);
+      // Connect dengan Mongoose
+      await mongoose.connect(this.mongoURI, {
+        serverSelectionTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
+      });
 
-    console.log("✅ Database initialized");
+      console.log("✅ Connected to MongoDB");
+
+      // Setup event listeners
+      mongoose.connection.on("error", (err) => {
+        console.error("❌ MongoDB connection error:", err);
+      });
+
+      mongoose.connection.on("disconnected", () => {
+        console.log("⚠️  MongoDB disconnected");
+      });
+
+      mongoose.connection.on("reconnected", () => {
+        console.log("✅ MongoDB reconnected");
+      });
+
+      console.log("✅ MongoDB database initialized");
+    } catch (error) {
+      console.error("❌ MongoDB initialization failed:");
+      console.error("   Error:", error.message);
+
+      if (error.name === "MongoServerSelectionError") {
+        console.error("   → MongoDB server is not reachable");
+        console.error("   → Check if MongoDB is running on Proxmox LXC");
+        console.error("   → Check DB_HOST and DB_PORT in .env");
+      } else if (error.name === "MongoAuthenticationError") {
+        console.error("   → Authentication failed");
+        console.error("   → Check DB_USER and DB_PASSWORD in .env");
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Ensure database is initialized
+   */
+  async ensureInitialized() {
+    if (!this.isInitialized) {
+      await this.initializeDatabase();
+    }
   }
 
   /**
    * Tambah job baru ke database
    */
-  addScheduledJob(formData, scheduledTime) {
+  async addScheduledJob(formData, scheduledTime) {
+    await this.ensureInitialized();
+
     const jobId = `job_${Date.now()}_${Math.random()
       .toString(36)
       .substr(2, 9)}`;
@@ -49,31 +174,26 @@ class DatabaseService {
       throw new Error("Scheduled time must be in the future");
     }
 
-    const stmt = this.db.prepare(`
-      INSERT INTO scheduled_jobs (
-        job_id, tid, kondisi_camera, kondisi_nvr, 
-        nama, perusahaan, no_pegawai, scheduled_time
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
     try {
-      stmt.run(
-        jobId,
-        formData.tid,
-        formData.kondisiCamera,
-        formData.kondisiNVR,
-        formData.nama,
-        formData.perusahaan,
-        formData.noPegawai,
-        scheduleDate.toISOString()
-      );
+      const job = new Job({
+        job_id: jobId,
+        tid: formData.tid,
+        kondisi_camera: formData.kondisiCamera,
+        kondisi_nvr: formData.kondisiNVR,
+        nama: formData.nama,
+        perusahaan: formData.perusahaan,
+        no_pegawai: formData.noPegawai,
+        scheduled_time: scheduleDate,
+      });
+
+      await job.save();
 
       console.log(`✅ Job added to database: ${jobId}`);
       console.log(`   ⏰ Scheduled for: ${scheduleDate.toISOString()}`);
 
-      return this.getJobById(jobId);
+      return job.toObject();
     } catch (error) {
-      console.error("❌ Failed to add job:", error);
+      console.error("❌ Failed to add job:", error.message);
       throw error;
     }
   }
@@ -81,75 +201,189 @@ class DatabaseService {
   /**
    * Ambil job berdasarkan ID
    */
-  getJobById(jobId) {
-    const stmt = this.db.prepare(
-      "SELECT * FROM scheduled_jobs WHERE job_id = ?"
-    );
-    return stmt.get(jobId);
+  async getJobById(jobId) {
+    await this.ensureInitialized();
+
+    try {
+      const job = await Job.findOne({ job_id: jobId });
+      return job ? job.toObject() : null;
+    } catch (error) {
+      console.error("❌ Failed to get job:", error.message);
+      throw error;
+    }
   }
 
   /**
    * Ambil semua pending jobs yang waktunya sudah tiba
    */
-  getPendingJobs() {
-    const now = new Date().toISOString();
-    const stmt = this.db.prepare(`
-      SELECT * FROM scheduled_jobs 
-      WHERE status = 'pending' 
-      AND scheduled_time <= ? 
-      ORDER BY scheduled_time ASC
-    `);
-    return stmt.all(now);
+  async getPendingJobs() {
+    await this.ensureInitialized();
+
+    try {
+      const jobs = await Job.find({
+        status: "pending",
+        scheduled_time: { $lte: new Date() },
+      })
+        .sort({ scheduled_time: 1 })
+        .lean(); // lean() untuk performa lebih baik
+
+      return jobs;
+    } catch (error) {
+      console.error("❌ Failed to get pending jobs:", error.message);
+      return [];
+    }
   }
 
   /**
    * Update status job setelah execution
    */
-  updateJobStatus(jobId, status, errorMessage = null) {
-    const stmt = this.db.prepare(`
-      UPDATE scheduled_jobs 
-      SET status = ?, 
-          executed_at = CURRENT_TIMESTAMP,
-          error_message = ?
-      WHERE job_id = ?
-    `);
+  async updateJobStatus(jobId, status, errorMessage = null) {
+    await this.ensureInitialized();
 
-    stmt.run(status, errorMessage, jobId);
-    console.log(`   📝 Job ${jobId} status updated: ${status}`);
+    try {
+      const job = await Job.findOneAndUpdate(
+        { job_id: jobId },
+        {
+          status: status,
+          executed_at: new Date(),
+          error_message: errorMessage,
+        },
+        { new: true } // Return updated document
+      );
+
+      if (job) {
+        console.log(`   📝 Job ${jobId} status updated: ${status}`);
+      }
+
+      return job ? job.toObject() : null;
+    } catch (error) {
+      console.error("❌ Failed to update job status:", error.message);
+      throw error;
+    }
   }
 
   /**
    * Ambil semua jobs (untuk list di frontend)
    */
-  getAllJobs(limit = 50) {
-    const stmt = this.db.prepare(`
-      SELECT * FROM scheduled_jobs 
-      ORDER BY created_at DESC 
-      LIMIT ?
-    `);
-    return stmt.all(limit);
+  async getAllJobs(limit = 50) {
+    await this.ensureInitialized();
+
+    try {
+      const jobs = await Job.find({})
+        .sort({ created_at: -1 })
+        .limit(limit)
+        .lean();
+
+      return jobs;
+    } catch (error) {
+      console.error("❌ Failed to get all jobs:", error.message);
+      return [];
+    }
   }
 
   /**
    * Hapus job berdasarkan ID
    */
-  deleteJob(jobId) {
-    const stmt = this.db.prepare("DELETE FROM scheduled_jobs WHERE job_id = ?");
-    const result = stmt.run(jobId);
-    return result.changes > 0;
+  async deleteJob(jobId) {
+    await this.ensureInitialized();
+
+    try {
+      const result = await Job.deleteOne({ job_id: jobId });
+      return result.deletedCount > 0;
+    } catch (error) {
+      console.error("❌ Failed to delete job:", error.message);
+      throw error;
+    }
   }
 
   /**
    * Cancel job yang masih pending
    */
-  cancelJob(jobId) {
-    const stmt = this.db.prepare(`
-      UPDATE scheduled_jobs 
-      SET status = 'cancelled' 
-      WHERE job_id = ? AND status = 'pending'
-    `);
-    const result = stmt.run(jobId);
-    return result.changes > 0;
+  async cancelJob(jobId) {
+    await this.ensureInitialized();
+
+    try {
+      const result = await Job.updateOne(
+        { job_id: jobId, status: "pending" },
+        { status: "cancelled" }
+      );
+
+      return result.modifiedCount > 0;
+    } catch (error) {
+      console.error("❌ Failed to cancel job:", error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get statistics
+   */
+  async getStats() {
+    await this.ensureInitialized();
+
+    try {
+      const stats = await Job.aggregate([
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      const result = {
+        pending_count: 0,
+        processing_count: 0,
+        completed_count: 0,
+        failed_count: 0,
+        cancelled_count: 0,
+        total_count: 0,
+      };
+
+      stats.forEach((stat) => {
+        const key = `${stat._id}_count`;
+        result[key] = stat.count;
+        result.total_count += stat.count;
+      });
+
+      return result;
+    } catch (error) {
+      console.error("❌ Failed to get stats:", error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Cleanup old jobs (older than X days)
+   */
+  async cleanupOldJobs(daysOld = 30) {
+    await this.ensureInitialized();
+
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+
+      const result = await Job.deleteMany({
+        created_at: { $lt: cutoffDate },
+        status: { $in: ["completed", "failed", "cancelled"] },
+      });
+
+      console.log(`✅ Cleaned up ${result.deletedCount} old job(s)`);
+      return result.deletedCount;
+    } catch (error) {
+      console.error("❌ Cleanup failed:", error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Close database connection
+   */
+  async close() {
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.connection.close();
+      console.log("🔌 MongoDB connection closed");
+    }
   }
 }
 

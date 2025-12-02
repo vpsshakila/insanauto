@@ -7,6 +7,7 @@ class SchedulerService {
   constructor() {
     this.isRunning = false;
     this.cronJob = null;
+    this.isProcessing = false;
   }
 
   /**
@@ -19,9 +20,21 @@ class SchedulerService {
     }
 
     // Cron expression: setiap menit
-    // Format: second minute hour day month dayOfWeek
     this.cronJob = cron.schedule("* * * * *", async () => {
-      await this.processPendingJobs();
+      // Prevent concurrent processing
+      if (this.isProcessing) {
+        console.log("⏭️  Skipping - previous job still processing");
+        return;
+      }
+
+      this.isProcessing = true;
+      try {
+        await this.processPendingJobs();
+      } catch (error) {
+        console.error("❌ Scheduler error:", error.message);
+      } finally {
+        this.isProcessing = false;
+      }
     });
 
     this.isRunning = true;
@@ -43,16 +56,28 @@ class SchedulerService {
    * Process semua pending jobs yang waktunya sudah tiba
    */
   async processPendingJobs() {
-    const pendingJobs = db.getPendingJobs();
+    try {
+      const pendingJobs = await db.getPendingJobs();
 
-    if (pendingJobs.length === 0) {
-      return; // Tidak ada job yang perlu diproses
-    }
+      // Check if pendingJobs is valid array
+      if (!Array.isArray(pendingJobs)) {
+        console.error("❌ getPendingJobs did not return an array");
+        return;
+      }
 
-    console.log(`\n🔄 Processing ${pendingJobs.length} pending job(s)...`);
+      if (pendingJobs.length === 0) {
+        return; // Tidak ada job yang perlu diproses
+      }
 
-    for (const job of pendingJobs) {
-      await this.executeJob(job);
+      console.log(`\n🔄 Processing ${pendingJobs.length} pending job(s)...`);
+
+      for (const job of pendingJobs) {
+        await this.executeJob(job);
+      }
+
+      console.log("✅ All pending jobs processed\n");
+    } catch (error) {
+      console.error("❌ Error processing pending jobs:", error.message);
     }
   }
 
@@ -66,7 +91,7 @@ class SchedulerService {
 
     try {
       // Update status ke "processing"
-      db.updateJobStatus(job.job_id, "processing");
+      await db.updateJobStatus(job.job_id, "processing");
 
       // Siapkan form data
       const formData = {
@@ -83,16 +108,16 @@ class SchedulerService {
 
       if (result.success) {
         // Update status ke "completed"
-        db.updateJobStatus(job.job_id, "completed");
+        await db.updateJobStatus(job.job_id, "completed");
         console.log(`✅ Job ${job.job_id} completed successfully`);
       } else {
         // Update status ke "failed"
-        db.updateJobStatus(job.job_id, "failed", result.message);
+        await db.updateJobStatus(job.job_id, "failed", result.message);
         console.error(`❌ Job ${job.job_id} failed: ${result.message}`);
       }
     } catch (error) {
       // Handle unexpected errors
-      db.updateJobStatus(job.job_id, "failed", error.message);
+      await db.updateJobStatus(job.job_id, "failed", error.message);
       console.error(`❌ Job ${job.job_id} error:`, error.message);
     }
   }
@@ -103,8 +128,17 @@ class SchedulerService {
   getStatus() {
     return {
       isRunning: this.isRunning,
+      isProcessing: this.isProcessing,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Manually trigger job processing (for testing)
+   */
+  async triggerProcessing() {
+    console.log("🔧 Manually triggering job processing...");
+    await this.processPendingJobs();
   }
 }
 
