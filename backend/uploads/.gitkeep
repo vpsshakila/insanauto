@@ -1,0 +1,7 @@
+**Update `.gitignore`:**
+```
+node_modules/
+uploads/*           # Ignore semua file di uploads
+!uploads/.gitkeep   # Kecuali file .gitkeep
+.env
+*.log
