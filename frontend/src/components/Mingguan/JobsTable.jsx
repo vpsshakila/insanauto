@@ -1,4 +1,4 @@
-import React from "react";
+// components/Mingguan/JobsTable.jsx
 import { Trash2, XCircle, CheckCircle, Clock, AlertCircle } from "lucide-react";
 
 const JobsTable = ({ jobs, onCancel, onDelete }) => {

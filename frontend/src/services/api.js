@@ -1,41 +1,11 @@
 // services/api.js
-const API_BASE_URL = "http://localhost:3000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export const apiService = {
   // Health check
   async healthCheck() {
     const response = await fetch(`${API_BASE_URL}/health`);
     if (!response.ok) throw new Error("Network response was not ok");
-    return await response.json();
-  },
-
-  // Submit form LANGSUNG
-  async submitForm(formData) {
-    const response = await fetch(`${API_BASE_URL}/submit-form`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    return await response.json();
-  },
-
-  // SCHEDULE form submission (BARU!)
-  async scheduleForm(formData, scheduledTime) {
-    const response = await fetch(`${API_BASE_URL}/schedule-form`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ formData, scheduledTime }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
     return await response.json();
   },
 

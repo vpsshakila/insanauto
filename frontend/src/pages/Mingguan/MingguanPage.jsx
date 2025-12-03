@@ -1,11 +1,12 @@
+// pages/MingguanPage.jsx
 import React, { useState, useEffect } from "react";
-import { Calendar, Plus, Trash2, Save, RefreshCw } from "lucide-react";
-import { apiService } from "../services/api";
-import FormDataTable from "./FormDataTable";
-import ScheduleModal from "./ScheduleModal";
-import JobsTable from "./JobsTable";
+import { Calendar, Plus, Save, RefreshCw } from "lucide-react";
+import { apiService } from "../../services/api";
+import FormDataTable from "../../components/Mingguan/FormDataTable";
+import ScheduleModal from "../../components/Mingguan/ScheduleModal";
+import JobsTable from "../../components/Mingguan/JobsTable";
 
-const BulkScheduler = () => {
+const MingguanPage = () => {
   const [formDataList, setFormDataList] = useState([]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -23,7 +24,6 @@ const BulkScheduler = () => {
     try {
       const response = await apiService.getTemplates();
       if (response.success) {
-        // Convert from database format to component format
         const templates = response.templates.map((t) => ({
           id: t._id,
           tid: t.tid,
@@ -32,7 +32,9 @@ const BulkScheduler = () => {
           nama: t.nama,
           perusahaan: t.perusahaan,
           noPegawai: t.no_pegawai,
-          isFromDB: true, // Flag to identify saved templates
+          namaLokasi: t.nama_lokasi || "", // Tambahkan ini
+          hari: t.hari || "", // Tambahkan ini
+          isFromDB: true,
         }));
         setFormDataList(templates);
       }
@@ -54,13 +56,15 @@ const BulkScheduler = () => {
 
   const handleAddRow = () => {
     const newRow = {
-      id: `temp_${Date.now()}`, // Temporary ID
+      id: `temp_${Date.now()}`,
       tid: "",
       kondisiCamera: "Baik",
       kondisiNVR: "Merekam",
       nama: "",
       perusahaan: "",
       noPegawai: "",
+      namaLokasi: "", // Tambahkan default value
+      hari: "", // Tambahkan default value
       isFromDB: false,
     };
     setFormDataList([...formDataList, newRow]);
@@ -69,7 +73,6 @@ const BulkScheduler = () => {
   const handleDeleteRow = async (id) => {
     const row = formDataList.find((r) => r.id === id);
 
-    // If row is from database, delete from DB
     if (row.isFromDB) {
       if (!confirm("Hapus template ini dari database?")) return;
 
@@ -81,7 +84,6 @@ const BulkScheduler = () => {
         alert("Gagal menghapus template: " + error.message);
       }
     } else {
-      // Just remove from state
       setFormDataList(formDataList.filter((r) => r.id !== id));
       setSelectedRows(selectedRows.filter((rowId) => rowId !== id));
     }
@@ -98,7 +100,6 @@ const BulkScheduler = () => {
   const handleSaveTemplates = async () => {
     setIsSaving(true);
     try {
-      // Save or update all rows
       const promises = formDataList.map(async (row) => {
         const formData = {
           tid: row.tid,
@@ -107,13 +108,13 @@ const BulkScheduler = () => {
           nama: row.nama,
           perusahaan: row.perusahaan,
           noPegawai: row.noPegawai,
+          namaLokasi: row.namaLokasi, // Tambahkan ini
+          hari: row.hari, // Tambahkan ini
         };
 
         if (row.isFromDB) {
-          // Update existing
           return apiService.updateTemplate(row.id, formData);
         } else {
-          // Add new
           return apiService.addTemplate(formData);
         }
       });
@@ -125,7 +126,6 @@ const BulkScheduler = () => {
         message: "✅ Templates berhasil disimpan!",
       });
 
-      // Reload templates
       await loadFormTemplates();
     } catch (error) {
       setResult({
@@ -167,12 +167,13 @@ const BulkScheduler = () => {
         selectedRows.includes(row.id)
       );
 
-      // Clean form data (remove id and isFromDB fields)
-      const cleanedForms = selectedForms.map(({ id, isFromDB, ...rest }) => ({
-        id,
-        isFromDB,
-        ...rest,
-      }));
+      const cleanedForms = selectedForms.map((row) => {
+        const { id, isFromDB, ...rest } = row;
+        // Hapus field yang tidak ingin dikirim ke schedule batch
+        delete rest.namaLokasi;
+        delete rest.hari;
+        return { id, isFromDB, ...rest };
+      });
 
       const response = await apiService.scheduleBatch(
         cleanedForms,
@@ -184,13 +185,8 @@ const BulkScheduler = () => {
         message: response.message,
       });
 
-      // Reload jobs
       await loadScheduledJobs();
-
-      // Clear selected rows
       setSelectedRows([]);
-
-      // Close modal
       setShowScheduleModal(false);
     } catch (error) {
       setResult({
@@ -228,7 +224,7 @@ const BulkScheduler = () => {
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            📋 Bulk Form Scheduler
+            📅 Upload Mingguan
           </h1>
           <p className="text-gray-600">
             Data form tersimpan otomatis. Tinggal pilih & jadwalkan kapan mau
@@ -346,4 +342,4 @@ const BulkScheduler = () => {
   );
 };
 
-export default BulkScheduler;
+export default MingguanPage;

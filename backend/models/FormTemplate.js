@@ -31,6 +31,26 @@ const formTemplateSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    nama_lokasi: {
+      // Tambahkan field ini
+      type: String,
+      default: "",
+    },
+    hari: {
+      // Tambahkan field ini
+      type: String,
+      enum: [
+        "Senin",
+        "Selasa",
+        "Rabu",
+        "Kamis",
+        "Jumat",
+        "Sabtu",
+        "Minggu",
+        "",
+      ],
+      default: "",
+    },
     is_active: {
       type: Boolean,
       default: true,

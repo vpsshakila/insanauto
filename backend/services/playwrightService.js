@@ -1,14 +1,22 @@
+// services/playwrightService.js
 const { chromium } = require("playwright");
 const path = require("path");
-require("dotenv").config(); // Load environment variables
+const fs = require("fs");
+require("dotenv").config();
 
 /**
  * Submit form ke Google Forms dengan automasi Google Drive picker
  */
 async function submitToGoogleForm(formData) {
   const userDataDir = path.join(__dirname, "../browser-data");
+  const logsDir = path.join(__dirname, "../logs");
 
-  // Config langsung dari environment variables
+  // Ensure logs directory exists
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+
+  // Config dari environment variables
   const config = {
     GOOGLE_FORM_URL:
       process.env.GOOGLE_FORM_URL || "https://forms.gle/nP6ZWewJZcg6pBwp8",
@@ -22,11 +30,10 @@ async function submitToGoogleForm(formData) {
   };
 
   console.log("🚀 Memulai submission...");
-  console.log("📋 Data:", formData);
-  console.log("⚙️  Config:", {
-    headless: config.HEADLESS,
-    slowMo: config.SLOW_MO,
-    formUrl: config.GOOGLE_FORM_URL,
+  console.log("📋 Data:", {
+    tid: formData.tid,
+    nama: formData.nama,
+    perusahaan: formData.perusahaan,
   });
 
   const browser = await chromium.launchPersistentContext(userDataDir, {
@@ -40,13 +47,10 @@ async function submitToGoogleForm(formData) {
 
     // ========== BUKA GOOGLE FORM ==========
     console.log("🌐 Membuka Google Form...");
-    console.log(`   📎 URL: ${config.GOOGLE_FORM_URL}`);
-
     await page.goto(config.GOOGLE_FORM_URL);
     await page.waitForLoadState("networkidle");
     console.log("✅ Form loaded");
 
-    // ... (sisa code tetap sama)
     // ========== ISI FIELD TEXT & RADIO ==========
     console.log("📝 Mengisi field form...");
 
@@ -111,7 +115,7 @@ async function submitToGoogleForm(formData) {
         const count = await element.count();
 
         if (count > 0) {
-          console.log(`   🎯 Found submit button with selector: ${selector}`);
+          console.log(`   🎯 Found submit button`);
           await element.click({ timeout: 5000 });
           clicked = true;
           break;
@@ -122,9 +126,7 @@ async function submitToGoogleForm(formData) {
     }
 
     if (!clicked) {
-      console.log(
-        "   ⚠️  No submit button found, checking if already submitted..."
-      );
+      console.log("   ⚠️  No submit button found");
     }
 
     // ========== VERIFIKASI SUKSES SUBMIT ==========
@@ -149,13 +151,13 @@ async function submitToGoogleForm(formData) {
     try {
       const pages = browser.pages();
       if (pages.length > 0) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         const screenshotPath = path.join(
-          __dirname,
-          "../logs",
-          `error-${Date.now()}.png`
+          logsDir,
+          `error-${formData.tid}-${timestamp}.png`
         );
         await pages[0].screenshot({ path: screenshotPath, fullPage: true });
-        console.log("📸 Screenshot error saved:", screenshotPath);
+        console.log("📸 Screenshot saved:", screenshotPath);
       }
     } catch (screenshotError) {
       console.error("Failed to save screenshot:", screenshotError.message);
@@ -176,10 +178,9 @@ async function submitToGoogleForm(formData) {
  * Verifikasi apakah form berhasil disubmit
  */
 async function verifySubmissionSuccess(page) {
-  const maxWaitTime = 15000; // 15 detik
+  const maxWaitTime = 15000;
   const startTime = Date.now();
 
-  // Multiple patterns untuk konfirmasi sukses
   const successPatterns = [
     /terkirim/i,
     /recorded/i,
@@ -192,7 +193,6 @@ async function verifySubmissionSuccess(page) {
     /your response has been recorded/i,
   ];
 
-  // Multiple patterns untuk halaman konfirmasi
   const confirmationSelectors = [
     ".freebirdFormviewerViewResponseConfirmationMessage",
     ".vHW8K",
@@ -202,56 +202,58 @@ async function verifySubmissionSuccess(page) {
   ];
 
   while (Date.now() - startTime < maxWaitTime) {
-    // Cek apakah ada teks konfirmasi sukses
+    // Cek teks konfirmasi
     for (const pattern of successPatterns) {
       try {
         const element = page.locator(`text=${pattern}`).first();
         if (await element.isVisible({ timeout: 1000 })) {
-          console.log(`   ✅ Detected success message: ${pattern}`);
+          console.log(`   ✅ Success confirmed`);
           return true;
         }
       } catch (e) {
-        // Continue to next pattern
+        // Continue
       }
     }
 
-    // Cek apakah ada elemen konfirmasi
+    // Cek elemen konfirmasi
     for (const selector of confirmationSelectors) {
       try {
         const element = page.locator(selector).first();
         if (await element.isVisible({ timeout: 1000 })) {
-          console.log(`   ✅ Detected confirmation element: ${selector}`);
+          console.log(`   ✅ Confirmation detected`);
           return true;
         }
       } catch (e) {
-        // Continue to next selector
+        // Continue
       }
     }
 
-    // Cek URL berubah (Google Forms biasanya redirect setelah submit)
+    // Cek URL berubah
     const currentUrl = page.url();
     if (currentUrl.includes("formResponse") || currentUrl.includes("confirm")) {
-      console.log(`   ✅ Detected confirmation URL: ${currentUrl}`);
+      console.log(`   ✅ Redirected to confirmation page`);
       return true;
     }
 
-    // Cek jika tombol submit sudah hilang (indikasi sudah pindah halaman)
+    // Cek tombol submit hilang
     const submitButton = page.locator('span:has-text("Kirim")').first();
-    if (!(await submitButton.isVisible({ timeout: 1000 }))) {
-      console.log("   ✅ Submit button disappeared - likely successful");
+    try {
+      if (!(await submitButton.isVisible({ timeout: 1000 }))) {
+        console.log("   ✅ Submit button disappeared");
+        return true;
+      }
+    } catch (e) {
+      // Button not found = likely submitted
       return true;
     }
 
-    // Tunggu sebentar sebelum cek lagi
     await page.waitForTimeout(1000);
   }
 
-  console.log("   ⚠️  No clear confirmation detected, but continuing...");
-
-  // Fallback: cek jika kita masih di halaman form atau sudah di halaman lain
+  // Fallback check
   const currentUrl = page.url();
   if (!currentUrl.includes("viewform")) {
-    console.log(`   ✅ Not on form page anymore: ${currentUrl}`);
+    console.log(`   ✅ No longer on form page`);
     return true;
   }
 
@@ -259,10 +261,10 @@ async function verifySubmissionSuccess(page) {
 }
 
 /**
- * Helper function: Upload foto dari Google Drive picker
+ * Upload foto dari Google Drive picker
  */
 async function uploadPhotoFromDrive(page, folderName, tid, pickerIndex) {
-  console.log(`📸 Upload Foto ${folderName} dari Google Drive...`);
+  console.log(`📸 Upload Foto ${folderName}...`);
 
   // Scroll ke field upload
   await page.locator(`text=Upload Foto ${folderName}`).scrollIntoViewIfNeeded();
@@ -272,7 +274,7 @@ async function uploadPhotoFromDrive(page, folderName, tid, pickerIndex) {
   const addFileButtons = page.getByText("Tambahkan file");
   await addFileButtons.nth(pickerIndex).click();
 
-  console.log("   ⏳ Waiting for Google Drive picker...");
+  console.log("   ⏳ Waiting for Drive picker...");
   await page.waitForTimeout(4000);
 
   // Find picker frame
@@ -287,36 +289,34 @@ async function uploadPhotoFromDrive(page, folderName, tid, pickerIndex) {
     throw new Error(`Picker iframe not found for ${folderName}`);
   }
 
-  console.log(`   ✅ Using picker frame [${pickerFrames.length - 1}]`);
-
-  // Wait for picker content to load
+  // Wait for picker to load
   await pickerFrame.waitForLoadState("domcontentloaded");
   await pickerFrame.waitForTimeout(2000);
 
-  // Klik tab "Drive Saya"
-  console.log('   🔄 Switching to "Drive Saya" tab...');
+  // Switch to "Drive Saya" tab
+  console.log('   🔄 Switching to "Drive Saya"...');
   await pickerFrame.getByRole("tab", { name: "Drive Saya" }).click();
   await pickerFrame.waitForTimeout(3000);
 
   // Navigate: Mingguan > [TID] > [Camera/NVR]
-  console.log(`   🗂️  Navigating: Mingguan > ${tid} > ${folderName}`);
+  console.log(`   🗂️  Path: Mingguan > ${tid} > ${folderName}`);
 
   await navigateToFolder(pickerFrame, "Mingguan");
   await navigateToFolder(pickerFrame, tid);
   await navigateToFolder(pickerFrame, folderName);
 
-  // Pilih foto (file pertama dengan ekstensi .jpg)
-  console.log(`   📸 Selecting ${folderName} photo...`);
+  // Select first photo
+  console.log(`   📸 Selecting photo...`);
   await selectFirstPhoto(pickerFrame);
 
-  console.log(`   ⏳ Waiting for upload to complete...`);
+  console.log(`   ⏳ Waiting for upload...`);
   await page.waitForTimeout(4000);
 
-  console.log(`   ✅ ${folderName} photo uploaded successfully`);
+  console.log(`   ✅ ${folderName} uploaded`);
 }
 
 /**
- * Helper function: Navigate ke folder dengan multiple fallback strategies
+ * Navigate to folder
  */
 async function navigateToFolder(pickerFrame, folderName) {
   try {
@@ -342,7 +342,7 @@ async function navigateToFolder(pickerFrame, folderName) {
 }
 
 /**
- * Helper function: Pilih foto pertama dengan multiple fallback strategies
+ * Select first photo
  */
 async function selectFirstPhoto(pickerFrame) {
   try {

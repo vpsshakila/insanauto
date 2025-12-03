@@ -1,7 +1,7 @@
 // App.jsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link } from "react-router-dom";
-import MingguanPage from "./pages/MingguanPage";
+import MingguanPage from "./pages/Mingguan/MingguanPage";
 
 function App() {
   return (

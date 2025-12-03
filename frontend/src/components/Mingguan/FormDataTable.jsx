@@ -1,4 +1,4 @@
-import React from "react";
+// components/Mingguan/FormDataTable.jsx
 import { Trash2 } from "lucide-react";
 
 const FormDataTable = ({
@@ -48,6 +48,12 @@ const FormDataTable = ({
             </th>
             <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
               No Pegawai
+            </th>
+            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+              Nama Lokasi
+            </th>
+            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+              Hari
             </th>
             <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">
               Aksi
@@ -133,6 +139,33 @@ const FormDataTable = ({
                   placeholder="12345"
                   className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+              </td>
+              <td className="px-4 py-3">
+                <input
+                  type="text"
+                  value={row.namaLokasi}
+                  onChange={(e) =>
+                    onUpdateRow(row.id, "namaLokasi", e.target.value)
+                  }
+                  placeholder="Nama Lokasi"
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </td>
+              <td className="px-4 py-3">
+                <select
+                  value={row.hari}
+                  onChange={(e) => onUpdateRow(row.id, "hari", e.target.value)}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Pilih Hari</option>
+                  <option value="Senin">Senin</option>
+                  <option value="Selasa">Selasa</option>
+                  <option value="Rabu">Rabu</option>
+                  <option value="Kamis">Kamis</option>
+                  <option value="Jumat">Jumat</option>
+                  <option value="Sabtu">Sabtu</option>
+                  <option value="Minggu">Minggu</option>
+                </select>
               </td>
               <td className="px-4 py-3 text-center">
                 <button

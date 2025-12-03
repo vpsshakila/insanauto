@@ -30,6 +30,8 @@ class TemplateService {
         nama: formData.nama,
         perusahaan: formData.perusahaan,
         no_pegawai: formData.noPegawai,
+        nama_lokasi: formData.namaLokasi || "", // Tambahkan ini
+        hari: formData.hari || "", // Tambahkan ini
       });
 
       await template.save();
@@ -56,6 +58,8 @@ class TemplateService {
           nama: formData.nama,
           perusahaan: formData.perusahaan,
           no_pegawai: formData.noPegawai,
+          nama_lokasi: formData.namaLokasi || "", // Tambahkan ini
+          hari: formData.hari || "", // Tambahkan ini
         },
         { new: true }
       );
