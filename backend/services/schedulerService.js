@@ -1,6 +1,6 @@
 // services/schedulerService.js
 const cron = require("node-cron");
-const db = require("./database");
+const jobService = require("./jobService");
 const queueService = require("./queueService");
 
 class SchedulerService {
@@ -57,7 +57,7 @@ class SchedulerService {
    */
   async processPendingJobs() {
     try {
-      const pendingJobs = await db.getPendingJobs();
+      const pendingJobs = await jobService.getPendingJobs();
 
       if (!Array.isArray(pendingJobs)) {
         console.error("❌ getPendingJobs did not return an array");

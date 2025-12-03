@@ -1,5 +1,5 @@
 // services/queueService.js
-const db = require("./database");
+const jobService = require("./jobService");
 const { submitToGoogleForm } = require("./playwrightService");
 
 class QueueService {
@@ -45,7 +45,7 @@ class QueueService {
 
     try {
       // Update status ke "processing"
-      await db.updateJobStatus(job.job_id, "processing");
+      await jobService.updateJobStatus(job.job_id, "processing");
 
       // Siapkan form data
       const formData = {
@@ -61,14 +61,14 @@ class QueueService {
       const result = await submitToGoogleForm(formData);
 
       if (result.success) {
-        await db.updateJobStatus(job.job_id, "completed");
+        await jobService.updateJobStatus(job.job_id, "completed");
         console.log(`   ✅ Job ${job.job_id} completed`);
       } else {
-        await db.updateJobStatus(job.job_id, "failed", result.message);
+        await jobService.updateJobStatus(job.job_id, "failed", result.message);
         console.error(`   ❌ Job ${job.job_id} failed: ${result.message}`);
       }
     } catch (error) {
-      await db.updateJobStatus(job.job_id, "failed", error.message);
+      await jobService.updateJobStatus(job.job_id, "failed", error.message);
       console.error(`   ❌ Job ${job.job_id} error: ${error.message}`);
     } finally {
       this.currentJob = null;

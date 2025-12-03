@@ -41,6 +41,4 @@ const formTemplateSchema = new mongoose.Schema(
   }
 );
 
-module.exports =
-  mongoose.models.FormTemplate ||
-  mongoose.model("FormTemplate", formTemplateSchema);
+module.exports = mongoose.model("FormTemplate", formTemplateSchema);
