@@ -1,11 +1,15 @@
-import "./App.css";
-import GoogleForm from "./components/GoogleForm";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Home from "./pages/Home";
+import About from "./pages/Mingguan";
 
 function App() {
   return (
-    <div className="App">
-      <GoogleForm />
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/mingguan" element={<About />} />
+      </Routes>
+    </Router>
   );
 }
 
