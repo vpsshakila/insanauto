@@ -39,6 +39,21 @@ export const apiService = {
     return await response.json();
   },
 
+  // BATCH SCHEDULE - Schedule multiple forms at once (BARU!)
+  async scheduleBatch(formDataList, scheduledTime) {
+    const response = await fetch(`${API_BASE_URL}/schedule-batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ formDataList, scheduledTime }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  },
+
   // Get all jobs
   async getJobs() {
     const response = await fetch(`${API_BASE_URL}/jobs`);
@@ -68,6 +83,46 @@ export const apiService = {
       method: "DELETE",
     });
     if (!response.ok) throw new Error("Failed to delete job");
+    return await response.json();
+  },
+
+  // ========== FORM TEMPLATES (NEW!) ==========
+
+  // Get all templates
+  async getTemplates() {
+    const response = await fetch(`${API_BASE_URL}/templates`);
+    if (!response.ok) throw new Error("Failed to fetch templates");
+    return await response.json();
+  },
+
+  // Add template
+  async addTemplate(formData) {
+    const response = await fetch(`${API_BASE_URL}/templates`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ formData }),
+    });
+    if (!response.ok) throw new Error("Failed to add template");
+    return await response.json();
+  },
+
+  // Update template
+  async updateTemplate(id, formData) {
+    const response = await fetch(`${API_BASE_URL}/templates/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ formData }),
+    });
+    if (!response.ok) throw new Error("Failed to update template");
+    return await response.json();
+  },
+
+  // Delete template
+  async deleteTemplate(id) {
+    const response = await fetch(`${API_BASE_URL}/templates/${id}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) throw new Error("Failed to delete template");
     return await response.json();
   },
 };

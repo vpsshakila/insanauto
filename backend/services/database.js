@@ -62,8 +62,50 @@ const jobSchema = new mongoose.Schema(
   }
 );
 
-// Model
+// Form Template Schema (NEW!)
+const formTemplateSchema = new mongoose.Schema(
+  {
+    tid: {
+      type: String,
+      required: true,
+    },
+    kondisi_camera: {
+      type: String,
+      required: true,
+      enum: ["Baik", "Problem"],
+      default: "Baik",
+    },
+    kondisi_nvr: {
+      type: String,
+      required: true,
+      enum: ["Merekam", "Problem"],
+      default: "Merekam",
+    },
+    nama: {
+      type: String,
+      required: true,
+    },
+    perusahaan: {
+      type: String,
+      required: true,
+    },
+    no_pegawai: {
+      type: String,
+      required: true,
+    },
+    is_active: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  {
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+  }
+);
+
+// Models
 const Job = mongoose.model("Job", jobSchema);
+const FormTemplate = mongoose.model("FormTemplate", formTemplateSchema);
 
 class DatabaseService {
   constructor() {
@@ -383,6 +425,118 @@ class DatabaseService {
     if (mongoose.connection.readyState !== 0) {
       await mongoose.connection.close();
       console.log("🔌 MongoDB connection closed");
+    }
+  }
+
+  // ========== FORM TEMPLATES METHODS (NEW!) ==========
+
+  /**
+   * Get all form templates
+   */
+  async getAllFormTemplates() {
+    await this.ensureInitialized();
+
+    try {
+      const templates = await FormTemplate.find({ is_active: true })
+        .sort({ created_at: -1 })
+        .lean();
+
+      return templates;
+    } catch (error) {
+      console.error("❌ Failed to get templates:", error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Add new form template
+   */
+  async addFormTemplate(formData) {
+    await this.ensureInitialized();
+
+    try {
+      const template = new FormTemplate({
+        tid: formData.tid,
+        kondisi_camera: formData.kondisiCamera,
+        kondisi_nvr: formData.kondisiNVR,
+        nama: formData.nama,
+        perusahaan: formData.perusahaan,
+        no_pegawai: formData.noPegawai,
+      });
+
+      await template.save();
+      console.log(`✅ Form template added: ${template._id}`);
+
+      return template.toObject();
+    } catch (error) {
+      console.error("❌ Failed to add template:", error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Update form template
+   */
+  async updateFormTemplate(id, formData) {
+    await this.ensureInitialized();
+
+    try {
+      const template = await FormTemplate.findByIdAndUpdate(
+        id,
+        {
+          tid: formData.tid,
+          kondisi_camera: formData.kondisiCamera,
+          kondisi_nvr: formData.kondisiNVR,
+          nama: formData.nama,
+          perusahaan: formData.perusahaan,
+          no_pegawai: formData.noPegawai,
+        },
+        { new: true }
+      );
+
+      if (template) {
+        console.log(`✅ Form template updated: ${id}`);
+      }
+
+      return template ? template.toObject() : null;
+    } catch (error) {
+      console.error("❌ Failed to update template:", error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete form template (soft delete)
+   */
+  async deleteFormTemplate(id) {
+    await this.ensureInitialized();
+
+    try {
+      const result = await FormTemplate.findByIdAndUpdate(
+        id,
+        { is_active: false },
+        { new: true }
+      );
+
+      return result !== null;
+    } catch (error) {
+      console.error("❌ Failed to delete template:", error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Hard delete form template
+   */
+  async hardDeleteFormTemplate(id) {
+    await this.ensureInitialized();
+
+    try {
+      const result = await FormTemplate.findByIdAndDelete(id);
+      return result !== null;
+    } catch (error) {
+      console.error("❌ Failed to hard delete template:", error.message);
+      throw error;
     }
   }
 }
