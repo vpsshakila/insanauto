@@ -243,7 +243,7 @@ const MingguanCard = ({
         }}
       >
         {/* Header - TID + Lokasi & Hari dalam satu baris */}
-        <div className="flex items-center justify-between p-3 bg-gradient-to-r from-[#43172F] to-[#5A1F40] ">
+        <div className="flex items-center justify-between p-3 bg-linear-to-r from-[#43172F] to-[#5A1F40] ">
           {/* Kiri: TID dengan icon dan checkbox (saat selection mode) */}
           <div className="flex items-center gap-2">
             {/* Selection Checkbox */}
@@ -264,22 +264,14 @@ const MingguanCard = ({
             {/* TID Icon & Value */}
             <div className="flex items-center gap-2">
               <div className="p-1 bg-white/20 rounded">
-                <Terminal size={16} className="text-white" />
+                <Terminal size={12} className="text-white" />
               </div>
-              <div className="text-lg font-bold text-white">{data.tid}</div>
+              <div className="text-md font-bold text-white">{data.tid}</div>
             </div>
           </div>
 
           {/* Kanan: Lokasi & Hari dalam satu baris */}
-          <div className="flex items-center gap-2">
-            {data.namaLokasi && (
-              <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm px-2 py-1 rounded-lg">
-                <MapPin size={12} className="text-[#F0C7A0]" />
-                <span className="text-xs text-white font-medium max-w-[60px] truncate">
-                  {data.namaLokasi}
-                </span>
-              </div>
-            )}
+          <div className="flex items-center ">
             {data.hari && (
               <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm px-2 py-1 rounded-lg">
                 <Calendar size={12} className="text-[#F0C7A0]" />
@@ -301,12 +293,23 @@ const MingguanCard = ({
               <User size={14} className="text-gray-600" />
               <span className="text-xs font-medium text-gray-700">Detail</span>
             </div>
-            <ChevronDown
-              size={14}
-              className={`text-gray-500 transition-transform duration-200 ${
-                isExpanded ? "rotate-180" : ""
-              }`}
-            />
+            <div className="flex gap-3 items-center">
+              {data.namaLokasi && (
+                <div className="flex items-center gap-1 bg-[#43172F] backdrop-blur-sm px-2 py-1 rounded-lg">
+                  <MapPin size={12} className="text-[#F0C7A0]" />
+                  <span className="text-xs text-white   truncate">
+                    {data.namaLokasi}
+                  </span>
+                </div>
+              )}
+
+              <ChevronDown
+                size={14}
+                className={`text-gray-500 transition-transform duration-200 ${
+                  isExpanded ? "rotate-180" : ""
+                }`}
+              />
+            </div>
           </button>
 
           {/* Expanded Content */}

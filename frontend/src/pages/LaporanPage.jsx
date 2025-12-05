@@ -1,6 +1,5 @@
 // pages/LaporanPage.jsx (contoh halaman)
 import React from "react";
-import AlertTest from "../components/AlertTest";
 
 const LaporanPage = () => {
   return (
@@ -10,7 +9,6 @@ const LaporanPage = () => {
         <p className="text-gray-600">
           Halaman laporan akan ditampilkan di sini.
         </p>
-        <AlertTest />
       </div>
     </div>
   );
