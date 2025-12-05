@@ -193,14 +193,14 @@ const FormDialog = ({
     }
 
     return {
-      tid: "",
+      tid: "190",
       kondisiCamera: "Baik",
       kondisiNVR: "Merekam",
-      nama: "",
-      perusahaan: "",
-      noPegawai: "",
-      namaLokasi: "",
-      hari: "",
+      nama: "ALIF AYATULLAH SUROJUL MUBAROK",
+      perusahaan: "INSAN",
+      noPegawai: "83045",
+      namaLokasi: "BRI UNIT ",
+      hari: "Senin",
     };
   });
 

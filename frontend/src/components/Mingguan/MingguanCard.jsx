@@ -260,7 +260,6 @@ const MingguanCard = ({
                 )}
               </div>
             )}
-
             {/* TID Icon & Value */}
             <div className="flex items-center gap-2">
               <div className="p-1 bg-white/20 rounded">
@@ -268,6 +267,14 @@ const MingguanCard = ({
               </div>
               <div className="text-md font-bold text-white">{data.tid}</div>
             </div>
+            {data.namaLokasi && (
+              <div className="flex items-center gap-1 bg-[#F0C7A0]  px-2 py-1 rounded-lg ">
+                <MapPin size={12} className="text-[#43172F]" />
+                <span className="text-xs text-[#43172F] font-medium max-w-[120px] truncate">
+                  {data.namaLokasi}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Kanan: Lokasi & Hari dalam satu baris */}
@@ -294,15 +301,6 @@ const MingguanCard = ({
               <span className="text-xs font-medium text-gray-700">Detail</span>
             </div>
             <div className="flex gap-3 items-center">
-              {data.namaLokasi && (
-                <div className="flex items-center gap-1 bg-[#43172F] backdrop-blur-sm px-2 py-1 rounded-lg">
-                  <MapPin size={12} className="text-[#F0C7A0]" />
-                  <span className="text-xs text-white   truncate">
-                    {data.namaLokasi}
-                  </span>
-                </div>
-              )}
-
               <ChevronDown
                 size={14}
                 className={`text-gray-500 transition-transform duration-200 ${
