@@ -1,11 +1,13 @@
 // pages/MingguanPage.jsx
-import React, { useState, useEffect } from "react";
-import { Calendar, Plus, RefreshCw } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Calendar, Plus, X, CheckSquare, Square } from "lucide-react";
 import { apiService } from "../../services/api";
-import FormDataCard from "../../components/Mingguan/FormDataCard";
+import MingguanCard from "../../components/Mingguan/MingguanCard";
 import ScheduleModal from "../../components/Mingguan/ScheduleModal";
 import JobsCard from "../../components/Mingguan/JobsCard";
-import FormDialog from "../../components/Mingguan/FormDialog"; // Import komponen tunggal
+import FormDialog from "../../components/Mingguan/FormDialog";
+import AlertDialog from "../../components/Alert/AlertDialog"; // Import AlertDialog
+import { useAlert } from "../../hooks/useAlert"; // Import custom hook
 
 const MingguanPage = () => {
   const [formDataList, setFormDataList] = useState([]);
@@ -13,12 +15,24 @@ const MingguanPage = () => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduledJobs, setScheduledJobs] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
   const [showFormDialog, setShowFormDialog] = useState(false);
-  const [dialogMode, setDialogMode] = useState("add"); // 'add' atau 'edit'
+  const [dialogMode, setDialogMode] = useState("add");
   const [editingRow, setEditingRow] = useState(null);
   const [dialogLoading, setDialogLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("forms");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const longPressTimer = useRef(null);
+
+  // Gunakan custom hook untuk alert
+  const {
+    alertState,
+    showAlert,
+    hideAlert,
+    showSuccess,
+    showError,
+    showConfirm,
+    showDeleteConfirm,
+  } = useAlert();
 
   useEffect(() => {
     loadFormTemplates();
@@ -44,7 +58,7 @@ const MingguanPage = () => {
         setFormDataList(templates);
       }
     } catch (error) {
-      console.error("Failed to load templates:", error);
+      showError("Gagal memuat template: " + error.message);
     }
   };
 
@@ -55,7 +69,7 @@ const MingguanPage = () => {
         setScheduledJobs(response.jobs);
       }
     } catch (error) {
-      console.error("Failed to load jobs:", error);
+      showError("Gagal memuat jobs: " + error.message);
     }
   };
 
@@ -63,7 +77,6 @@ const MingguanPage = () => {
     setDialogLoading(true);
     try {
       if (dialogMode === "add") {
-        // Mode Add
         const response = await apiService.addTemplate(formData);
         if (response.success) {
           const savedForm = {
@@ -73,13 +86,9 @@ const MingguanPage = () => {
           };
           setFormDataList([...formDataList, savedForm]);
           setShowFormDialog(false);
-          setResult({
-            success: true,
-            message: "✅ Data form berhasil disimpan ke database!",
-          });
+          showSuccess("Data form berhasil disimpan!");
         }
       } else {
-        // Mode Edit
         const { id, ...dataToUpdate } = formData;
         const response = await apiService.updateTemplate(id, dataToUpdate);
 
@@ -91,50 +100,76 @@ const MingguanPage = () => {
           );
           setShowFormDialog(false);
           setEditingRow(null);
-          setResult({
-            success: true,
-            message: "✅ Data form berhasil diperbarui!",
-          });
+          showSuccess("Data form berhasil diperbarui!");
         }
       }
     } catch (error) {
-      setResult({
-        success: false,
-        message: `❌ Gagal ${
-          dialogMode === "add" ? "menyimpan" : "memperbarui"
-        } data form: ${error.message}`,
-      });
+      showError(
+        `Gagal ${dialogMode === "add" ? "menyimpan" : "memperbarui"} data: ${
+          error.message
+        }`
+      );
     } finally {
       setDialogLoading(false);
     }
   };
 
   const handleDeleteRow = async (id) => {
-    const _row = formDataList.find((r) => r.id === id);
-
-    if (!confirm("Hapus template ini dari database?")) return;
-
     try {
       await apiService.deleteTemplate(id);
       setFormDataList(formDataList.filter((r) => r.id !== id));
       setSelectedRows(selectedRows.filter((rowId) => rowId !== id));
-      setResult({
-        success: true,
-        message: "✅ Template berhasil dihapus!",
-      });
+      showSuccess("Template berhasil dihapus!");
     } catch (error) {
-      setResult({
-        success: false,
-        message: "❌ Gagal menghapus template: " + error.message,
-      });
+      showError("Gagal menghapus template: " + error.message);
     }
   };
 
-  const handleSelectRow = (id) => {
-    if (selectedRows.includes(id)) {
-      setSelectedRows(selectedRows.filter((rowId) => rowId !== id));
+  // Handle card click for selection
+  const handleCardClick = (id, e) => {
+    // Check if clicking on card body (not buttons)
+    if (
+      e.target.closest("button") ||
+      e.target.closest("svg") ||
+      e.target.closest("path")
+    ) {
+      return;
+    }
+
+    if (selectionMode) {
+      // Toggle selection
+      if (selectedRows.includes(id)) {
+        setSelectedRows(selectedRows.filter((rowId) => rowId !== id));
+      } else {
+        setSelectedRows([...selectedRows, id]);
+      }
     } else {
-      setSelectedRows([...selectedRows, id]);
+      // Enter selection mode on desktop
+      const isTouchDevice =
+        "ontouchstart" in window || navigator.maxTouchPoints > 0;
+      if (!isTouchDevice) {
+        setSelectionMode(true);
+        setSelectedRows([id]);
+      }
+    }
+  };
+
+  // Handle long press for mobile
+  const handleCardPressStart = () => {
+    const isTouchDevice =
+      "ontouchstart" in window || navigator.maxTouchPoints > 0;
+
+    if (isTouchDevice && !selectionMode) {
+      longPressTimer.current = setTimeout(() => {
+        setSelectionMode(true);
+      }, 500);
+    }
+  };
+
+  const handleCardPressEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
     }
   };
 
@@ -148,12 +183,15 @@ const MingguanPage = () => {
 
   const handleSchedule = async (scheduledTime) => {
     if (selectedRows.length === 0) {
-      alert("Pilih minimal 1 form untuk dijadwalkan!");
+      showAlert({
+        type: "warning",
+        title: "Peringatan",
+        message: "Pilih minimal 1 form!",
+      });
       return;
     }
 
     setLoading(true);
-    setResult(null);
 
     try {
       const selectedForms = formDataList.filter((row) =>
@@ -172,43 +210,50 @@ const MingguanPage = () => {
         scheduledTime
       );
 
-      setResult({
-        success: true,
-        message: response.message,
-      });
+      showSuccess(response.message);
 
       await loadScheduledJobs();
       setSelectedRows([]);
+      setSelectionMode(false);
       setShowScheduleModal(false);
       setActiveTab("jobs");
     } catch (error) {
-      setResult({
-        success: false,
-        message: "Error: " + error.message,
-      });
+      showError("Error: " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancelJob = async (jobId) => {
-    try {
-      await apiService.cancelJob(jobId);
-      await loadScheduledJobs();
-    } catch (error) {
-      alert("Gagal membatalkan job: " + error.message);
-    }
+    showConfirm({
+      title: "Konfirmasi Pembatalan",
+      message: "Apakah Anda yakin ingin membatalkan job ini?",
+      confirmText: "Batalkan",
+      onConfirm: async () => {
+        try {
+          await apiService.cancelJob(jobId);
+          await loadScheduledJobs();
+          showSuccess("Job berhasil dibatalkan");
+        } catch (error) {
+          showError("Gagal membatalkan job: " + error.message);
+        }
+      },
+    });
   };
 
   const handleDeleteJob = async (jobId) => {
-    if (!confirm("Yakin mau hapus job ini?")) return;
-
-    try {
-      await apiService.deleteJob(jobId);
-      await loadScheduledJobs();
-    } catch (error) {
-      alert("Gagal menghapus job: " + error.message);
-    }
+    showDeleteConfirm({
+      message: "Apakah Anda yakin ingin menghapus job ini?",
+      onConfirm: async () => {
+        try {
+          await apiService.deleteJob(jobId);
+          await loadScheduledJobs();
+          showSuccess("Job berhasil dihapus");
+        } catch (error) {
+          showError("Gagal menghapus job: " + error.message);
+        }
+      },
+    });
   };
 
   const openAddDialog = () => {
@@ -223,186 +268,192 @@ const MingguanPage = () => {
     setShowFormDialog(true);
   };
 
+  const cancelSelection = () => {
+    setSelectedRows([]);
+    setSelectionMode(false);
+  };
+
   return (
-    <div className="min-h-screen bg-[#F0C7A0]">
-      {/* Header */}
-      <div className="bg-[#43172F] text-white p-4">
-        <div>
-          <h1 className="text-xl font-bold">📅 Upload Mingguan</h1>
-          <p className="text-sm text-[#F0C7A0] opacity-80">
-            Data form tersimpan otomatis ke database
-          </p>
-        </div>
+    <div className="min-h-screen bg-[#F0C7A0] flex flex-col items-center">
+      <div className="w-full max-w-md flex-1">
+        {/* Header */}
+        <div className="bg-[#43172F] text-white px-4 pt-2 pb-3 sticky top-0 z-20">
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-xl font-bold py-2">Mingguan</h1>
 
-        {/* Desktop Tabs - Posisi di atas */}
-        <div className="flex gap-4 mt-4">
-          <button
-            onClick={() => setActiveTab("forms")}
-            className={`px-6 py-3 rounded-lg flex items-center gap-2 ${
-              activeTab === "forms"
-                ? "bg-white text-[#43172F]"
-                : "bg-[#5A1F40] text-white hover:bg-[#6A2F50]"
-            }`}
-          >
-            📋 Data Form ({formDataList.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("jobs")}
-            className={`px-6 py-3 rounded-lg flex items-center gap-2 ${
-              activeTab === "jobs"
-                ? "bg-white text-[#43172F]"
-                : "bg-[#5A1F40] text-white hover:bg-[#6A2F50]"
-            }`}
-          >
-            ⏰ Scheduled Jobs ({scheduledJobs.length})
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="p-6">
-        {/* Result Alert */}
-        {result && (
-          <div
-            className={`mb-6 p-4 rounded-lg ${
-              result.success
-                ? "bg-green-100 border border-green-300 text-green-800"
-                : "bg-red-100 border border-red-300 text-red-800"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="font-medium">{result.message}</span>
+            {/* Add Button di Pojok Kanan Atas - New Design */}
+            {activeTab === "forms" && !selectionMode && (
               <button
-                onClick={() => setResult(null)}
-                className="text-gray-500 hover:text-gray-700"
+                onClick={openAddDialog}
+                className="px-2 py-2 bg-[#F0C7A0] text-[#43172F] rounded-lg flex items-center gap-2 hover:bg-[#F0C7A0]/90 active:scale-95 transition-all font-medium"
+                aria-label="Tambah Form"
               >
-                ✕
+                <Plus size={18} />
               </button>
+            )}
+          </div>
+
+          {/* Tab Controller dengan Animasi */}
+          <div className="relative bg-[#5A1F40] rounded-lg p-0.5">
+            <div className="flex h-10">
+              <button
+                onClick={() => {
+                  setActiveTab("forms");
+                  if (selectionMode) {
+                    cancelSelection();
+                  }
+                }}
+                className={`flex-1 rounded-md text-center transition-all duration-300 ease-in-out relative ${
+                  activeTab === "forms" ? "text-[#43172F]" : "text-white"
+                }`}
+              >
+                <div
+                  className={`absolute inset-0 rounded-md transition-all duration-300 ease-in-out ${
+                    activeTab === "forms"
+                      ? "bg-white shadow scale-100 opacity-100"
+                      : "scale-95 opacity-0"
+                  }`}
+                />
+                <div className="relative flex items-center justify-center gap-1.5 h-full">
+                  <span className="text-sm font-medium ">Forms</span>
+                  <span className="bg-[#43172F] text-white px-1.5 py-0.5 rounded-full text-xs">
+                    {formDataList.length}
+                  </span>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab("jobs");
+                  if (selectionMode) {
+                    cancelSelection();
+                  }
+                }}
+                className={`flex-1 rounded-md text-center transition-all duration-300 ease-in-out relative ${
+                  activeTab === "jobs" ? "text-[#43172F]" : "text-white"
+                }`}
+              >
+                <div
+                  className={`absolute inset-0 rounded-md transition-all duration-300 ease-in-out ${
+                    activeTab === "jobs"
+                      ? "bg-white shadow scale-100 opacity-100"
+                      : "scale-95 opacity-0"
+                  }`}
+                />
+                <div className="relative flex items-center justify-center gap-1.5 h-full">
+                  <span className="text-sm font-medium">Jobs</span>
+                  <span className="bg-[#43172F] text-white px-1.5 py-0.5 rounded-full text-xs">
+                    {scheduledJobs.length}
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Selection Header Bar */}
+        {selectionMode && (
+          <div className="bg-white border-b border-gray-200 p-3 sticky top-[88px] z-10 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleSelectAll}
+                  className="flex items-center gap-2"
+                >
+                  {selectedRows.length === formDataList.length &&
+                  formDataList.length > 0 ? (
+                    <CheckSquare size={20} className="text-[#43172F]" />
+                  ) : (
+                    <Square size={20} className="text-gray-400" />
+                  )}
+                  <span className="text-sm font-medium text-gray-700">
+                    Pilih Semua
+                  </span>
+                </button>
+                <span className="text-sm text-gray-500">
+                  {selectedRows.length} terpilih
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowScheduleModal(true)}
+                  className="px-4 py-1.5 bg-[#2D5016] text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2D5016]/90 transition-colors"
+                  disabled={selectedRows.length === 0}
+                >
+                  Jadwalkan
+                </button>
+                <button
+                  onClick={cancelSelection}
+                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                  aria-label="Cancel selection"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Action Buttons - Desktop Only */}
-        <div className="flex gap-3 mb-6">
-          <button
-            onClick={openAddDialog}
-            className="flex items-center gap-2 px-5 py-3 bg-[#43172F] text-white rounded-lg hover:bg-[#5A1F40] transition"
-          >
-            <Plus size={20} />
-            Tambah Data Form
-          </button>
-
-          {selectedRows.length > 0 && (
-            <button
-              onClick={() => setShowScheduleModal(true)}
-              className="flex items-center gap-2 px-5 py-3 bg-[#2D5016] text-white rounded-lg hover:bg-[#3D6A1E] transition"
-            >
-              <Calendar size={20} />
-              Jadwalkan ({selectedRows.length})
-            </button>
-          )}
-
-          <button
-            onClick={loadScheduledJobs}
-            className="flex items-center gap-2 px-5 py-3 bg-white text-[#43172F] border border-[#43172F] rounded-lg hover:bg-gray-50"
-          >
-            <RefreshCw size={18} />
-            Refresh Jobs
-          </button>
-        </div>
-
-        {/* Forms Tab Content */}
-        {activeTab === "forms" && (
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[#43172F]">
-                Daftar Data Form ({formDataList.length})
-              </h2>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">
-                  {selectedRows.length} dipilih
-                </span>
-              </div>
-            </div>
-
-            {formDataList.length === 0 ? (
-              <div className="bg-white rounded-xl p-8 text-center shadow-sm">
-                <div className="text-4xl mb-4">📋</div>
-                <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                  Belum ada data form
-                </h3>
-                <p className="text-gray-500 mb-4">
-                  Tambahkan data form untuk memulai
-                </p>
-                <button
-                  onClick={openAddDialog}
-                  className="px-6 py-3 bg-[#43172F] text-white rounded-lg font-medium"
-                >
-                  <Plus size={20} className="inline mr-2" />
-                  Tambah Data Form
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* Select All */}
-                <div className="bg-white rounded-lg p-4 mb-4 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={
-                        selectedRows.length === formDataList.length &&
-                        formDataList.length > 0
-                      }
-                      onChange={handleSelectAll}
-                      className="w-5 h-5 text-[#43172F] rounded"
-                    />
-                    <span className="font-medium text-[#43172F]">
-                      Pilih Semua ({selectedRows.length} dipilih)
-                    </span>
-                  </div>
+        {/* Main Content */}
+        <div className="p-4 pb-6">
+          {/* Forms Tab Content */}
+          {activeTab === "forms" && (
+            <div className="mb-6">
+              {/* Forms List */}
+              {formDataList.length === 0 ? (
+                <div className="bg-white rounded-xl p-6 text-center shadow">
+                  <div className="text-5xl mb-4">📋</div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                    Belum ada data form
+                  </h3>
+                  <p className="text-gray-500">
+                    Tekan tombol Tambah di atas untuk menambah
+                  </p>
                 </div>
-
-                {/* Forms Grid */}
-                <div className="grid gap-4">
+              ) : (
+                <div className="space-y-2">
                   {formDataList.map((row) => (
-                    <FormDataCard
+                    <MingguanCard
                       key={row.id}
                       data={row}
                       isSelected={selectedRows.includes(row.id)}
-                      onSelect={() => handleSelectRow(row.id)}
+                      selectionMode={selectionMode}
                       onEdit={() => openEditDialog(row)}
-                      onDelete={handleDeleteRow}
+                      onDelete={() => handleDeleteRow(row.id)}
+                      onPressStart={handleCardPressStart}
+                      onPressEnd={handleCardPressEnd}
+                      onClick={(e) => handleCardClick(row.id, e)}
+                      showDeleteConfirm={showDeleteConfirm} // Tambahkan prop
                     />
                   ))}
                 </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Jobs Tab Content */}
-        {activeTab === "jobs" && (
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[#43172F]">
-                Scheduled Jobs ({scheduledJobs.length})
-              </h2>
-              <button
-                onClick={loadScheduledJobs}
-                className="flex items-center gap-2 px-4 py-2 bg-white text-[#43172F] border border-[#43172F] rounded-lg hover:bg-gray-50"
-              >
-                <RefreshCw size={18} />
-                Refresh
-              </button>
+              )}
             </div>
+          )}
 
-            <JobsCard
-              jobs={scheduledJobs}
-              onCancel={handleCancelJob}
-              onDelete={handleDeleteJob}
-            />
-          </div>
-        )}
+          {/* Jobs Tab Content */}
+          {activeTab === "jobs" && (
+            <div className="pb-14">
+              {scheduledJobs.length === 0 ? (
+                <div className="bg-white rounded-xl p-6 text-center shadow">
+                  <div className="text-5xl mb-4">⏰</div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                    Belum ada job
+                  </h3>
+                  <p className="text-gray-500">
+                    Jadwalkan form untuk membuat job
+                  </p>
+                </div>
+              ) : (
+                <JobsCard
+                  jobs={scheduledJobs}
+                  onCancel={handleCancelJob}
+                  onDelete={handleDeleteJob}
+                />
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Schedule Modal */}
@@ -415,7 +466,7 @@ const MingguanPage = () => {
         />
       )}
 
-      {/* Form Dialog (Tunggal untuk Add dan Edit) */}
+      {/* Form Dialog */}
       {showFormDialog && (
         <FormDialog
           mode={dialogMode}
@@ -426,8 +477,22 @@ const MingguanPage = () => {
           onSubmit={handleFormSubmit}
           initialData={editingRow}
           loading={dialogLoading}
+          showAlert={showAlert}
         />
       )}
+
+      {/* Alert Dialog */}
+      <AlertDialog
+        isOpen={alertState.isOpen}
+        onClose={hideAlert}
+        onConfirm={alertState.onConfirm}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        confirmText={alertState.confirmText}
+        cancelText={alertState.cancelText}
+        showCancel={alertState.showCancel}
+      />
     </div>
   );
 };

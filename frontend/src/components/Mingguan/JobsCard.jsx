@@ -1,47 +1,54 @@
 // components/Mingguan/JobsCard.jsx
+import React from "react";
 import {
   Trash2,
   XCircle,
   CheckCircle,
   Clock,
   AlertCircle,
-  ChevronRight,
   Calendar,
-  User,
+  ChevronDown,
+  Terminal,
+  Hourglass,
 } from "lucide-react";
 
 const JobsCard = ({ jobs, onCancel, onDelete }) => {
   const getStatusConfig = (status) => {
     const configs = {
       pending: {
-        bg: "bg-yellow-100",
-        text: "text-yellow-800",
+        bg: "bg-yellow-50",
+        border: "border-yellow-200",
+        text: "text-yellow-700",
         icon: Clock,
-        label: "Menunggu",
+        label: "Pending",
       },
       processing: {
-        bg: "bg-blue-100",
-        text: "text-blue-800",
+        bg: "bg-blue-50",
+        border: "border-blue-200",
+        text: "text-blue-700",
         icon: Clock,
-        label: "Diproses",
+        label: "Processing",
       },
       completed: {
-        bg: "bg-green-100",
-        text: "text-green-800",
+        bg: "bg-green-50",
+        border: "border-green-200",
+        text: "text-green-700",
         icon: CheckCircle,
-        label: "Selesai",
+        label: "Completed",
       },
       failed: {
-        bg: "bg-red-100",
-        text: "text-red-800",
+        bg: "bg-red-50",
+        border: "border-red-200",
+        text: "text-red-700",
         icon: AlertCircle,
-        label: "Gagal",
+        label: "Failed",
       },
       cancelled: {
-        bg: "bg-gray-100",
-        text: "text-gray-800",
+        bg: "bg-gray-50",
+        border: "border-gray-200",
+        text: "text-gray-700",
         icon: XCircle,
-        label: "Dibatalkan",
+        label: "Cancelled",
       },
     };
     return configs[status] || configs.pending;
@@ -51,9 +58,8 @@ const JobsCard = ({ jobs, onCancel, onDelete }) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffTime = date - now;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    // Format tanggal
+    // Format tanggal pendek
     const dateStr = date.toLocaleDateString("id-ID", {
       day: "numeric",
       month: "short",
@@ -65,162 +71,161 @@ const JobsCard = ({ jobs, onCancel, onDelete }) => {
       minute: "2-digit",
     });
 
-    // Waktu tersisa
+    // Format waktu tersisa yang lebih sederhana
     let timeRemaining;
-    if (diffDays < 0) {
-      timeRemaining = "Lewat waktu";
-    } else if (diffDays === 0) {
-      const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
-      timeRemaining = diffHours <= 0 ? "Hari ini" : `${diffHours} jam lagi`;
-    } else if (diffDays === 1) {
-      timeRemaining = "Besok";
+    let timeRemainingColor = "text-gray-600";
+    let timeRemainingIcon = <Clock size={14} />;
+
+    if (diffTime < 0) {
+      timeRemaining = "Overdue";
+      timeRemainingColor = "text-red-600";
+      timeRemainingIcon = <AlertCircle size={14} />;
     } else {
-      timeRemaining = `${diffDays} hari lagi`;
+      const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffHours / 24);
+
+      if (diffDays > 0) {
+        timeRemaining = `${diffDays}d`;
+        timeRemainingColor =
+          diffDays <= 1 ? "text-orange-600" : "text-blue-600";
+      } else if (diffHours > 0) {
+        timeRemaining = `${diffHours}h`;
+        timeRemainingColor =
+          diffHours <= 3 ? "text-orange-600" : "text-green-600";
+      } else {
+        const diffMinutes = Math.floor(diffTime / (1000 * 60));
+        timeRemaining = `${diffMinutes}m`;
+        timeRemainingColor = "text-green-600";
+      }
     }
 
-    return { dateStr, timeStr, timeRemaining };
+    return {
+      dateStr,
+      timeStr,
+      timeRemaining,
+      timeRemainingColor,
+      timeRemainingIcon,
+    };
   };
 
   if (jobs.length === 0) {
     return (
-      <div className="bg-white rounded-xl p-8 md:p-12 text-center shadow-sm">
-        <div className="text-6xl mb-6 opacity-20">⏰</div>
-        <h3 className="text-xl font-semibold text-gray-700 mb-3">
-          Belum ada scheduled jobs
+      <div className="bg-white rounded-xl p-6 text-center shadow">
+        <div className="text-4xl mb-3 opacity-20">⏰</div>
+        <h3 className="text-base font-semibold text-gray-700 mb-1">
+          No scheduled jobs
         </h3>
-        <p className="text-gray-500 max-w-md mx-auto">
-          Pilih data form dan jadwalkan upload untuk membuat scheduled jobs
-        </p>
+        <p className="text-gray-500 text-sm">Schedule forms to create jobs</p>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+    <div className="space-y-3">
       {jobs.map((job) => {
         const statusConfig = getStatusConfig(job.status);
         const Icon = statusConfig.icon;
-        const { dateStr, timeStr, timeRemaining } = formatDateTime(
-          job.scheduled_time
-        );
+        const { dateStr, timeStr, timeRemaining, timeRemainingColor } =
+          formatDateTime(job.scheduled_time || job.scheduledTime);
 
         return (
           <div
             key={job._id}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+            className="bg-white rounded-xl shadow border border-gray-100"
           >
-            <div className="p-4 md:p-6">
-              {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-                    <h3 className="text-lg font-bold text-[#43172F]">
-                      TID:{" "}
-                      <span className="bg-[#F0C7A0]/30 px-2 py-1 rounded">
-                        {job.tid}
-                      </span>
-                    </h3>
-                    <span
-                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}
-                    >
-                      <Icon size={12} />
-                      {statusConfig.label}
+            {/* Compact Job Card */}
+            <div className="p-3">
+              {/* Header Line - Status + TID */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`px-2 py-1 rounded-lg flex items-center gap-1 text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}
+                  >
+                    <Icon size={12} />
+                    <span>{statusConfig.label}</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <div className="p-1 bg-gray-100 rounded">
+                      <Terminal size={14} className="text-gray-600" />
+                    </div>
+                    <span className="text-base font-bold text-gray-800">
+                      {job.tid}
                     </span>
                   </div>
-
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <User size={14} />
-                    <span className="truncate">{job.nama}</span>
-                  </div>
                 </div>
 
-                <ChevronRight
-                  size={20}
-                  className="text-gray-400 flex-shrink-0 ml-2"
-                />
-              </div>
-
-              {/* Job Details */}
-              <div className="space-y-4">
-                {/* Perusahaan */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="text-xs text-gray-500 mb-1">Perusahaan</div>
-                  <div className="font-medium text-gray-800 truncate">
-                    {job.perusahaan}
-                  </div>
-                </div>
-
-                {/* Waktu Jadwal */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-                      <Calendar size={12} />
-                      Tanggal
-                    </div>
-                    <div className="font-medium text-gray-800">{dateStr}</div>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <div className="text-xs text-gray-500 mb-1">Jam</div>
-                    <div className="font-medium text-gray-800">{timeStr}</div>
-                  </div>
-                </div>
-
-                {/* Waktu Tersisa */}
-                <div
-                  className={`rounded-lg p-3 ${
-                    timeRemaining === "Lewat waktu"
-                      ? "bg-red-50 border border-red-100"
-                      : timeRemaining.includes("hari")
-                      ? "bg-orange-50 border border-orange-100"
-                      : "bg-green-50 border border-green-100"
-                  }`}
-                >
-                  <div className="text-xs text-gray-500 mb-1">Sisa Waktu</div>
-                  <div
-                    className={`font-medium ${
-                      timeRemaining === "Lewat waktu"
-                        ? "text-red-600"
-                        : timeRemaining.includes("hari")
-                        ? "text-orange-600"
-                        : "text-green-600"
-                    }`}
+                {/* Action Menu */}
+                {job.status === "pending" && (
+                  <button
+                    onClick={() => onCancel(job.job_id || job._id)}
+                    className="p-1.5 text-gray-500 hover:text-red-600"
+                    aria-label="Cancel job"
                   >
-                    {timeRemaining}
+                    <XCircle size={16} />
+                  </button>
+                )}
+              </div>
+
+              {/* Time Info - Compact Layout */}
+              <div className="grid grid-cols-3 gap-1.5">
+                {/* Date */}
+                <div className="flex items-center gap-1.5 p-2 bg-gray-50 rounded-lg">
+                  <div className="p-1 bg-white rounded">
+                    <Calendar size={14} className="text-gray-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-gray-500 font-medium">
+                      Date
+                    </div>
+                    <div className="text-sm font-semibold text-gray-800 truncate">
+                      {dateStr}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Time */}
+                <div className="flex items-center gap-1.5 p-2 bg-gray-50 rounded-lg">
+                  <div className="p-1 bg-white rounded">
+                    <Clock size={14} className="text-gray-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-gray-500 font-medium">
+                      Time
+                    </div>
+                    <div className="text-sm font-semibold text-gray-800">
+                      {timeStr}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Time Remaining */}
+                <div className="flex items-center gap-1.5 p-2 bg-gray-50 rounded-lg">
+                  <div className="p-1 bg-white rounded">
+                    <Hourglass size={14} className="text-gray-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-gray-500 font-medium">
+                      Remaining
+                    </div>
+                    <div
+                      className={`text-sm font-semibold ${timeRemainingColor}`}
+                    >
+                      {timeRemaining}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="mt-6 pt-4 border-t border-gray-100">
-                <div className="flex gap-2">
-                  {job.status === "pending" ? (
-                    <>
-                      <button
-                        onClick={() => onCancel(job.job_id)}
-                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-yellow-50 text-yellow-700 rounded-lg text-sm hover:bg-yellow-100 transition font-medium"
-                      >
-                        <XCircle size={16} />
-                        <span>Batalkan</span>
-                      </button>
-                      <button
-                        onClick={() => onDelete(job.job_id)}
-                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-50 text-red-700 rounded-lg text-sm hover:bg-red-100 transition font-medium"
-                      >
-                        <Trash2 size={16} />
-                        <span>Hapus</span>
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => onDelete(job.job_id)}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition font-medium"
-                    >
-                      <Trash2 size={16} />
-                      <span>Hapus</span>
-                    </button>
-                  )}
-                </div>
+              {/* Delete Button - Small at bottom */}
+              <div className="mt-2 pt-2 border-t border-gray-100">
+                <button
+                  onClick={() => onDelete(job.job_id || job._id)}
+                  className="w-full py-2 flex items-center justify-center gap-1.5 bg-gray-50 text-gray-700 hover:bg-red-50 hover:text-red-600 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Trash2 size={14} />
+                  <span>Delete Job</span>
+                </button>
               </div>
             </div>
           </div>
