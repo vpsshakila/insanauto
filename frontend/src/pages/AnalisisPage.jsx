@@ -1,7 +1,9 @@
 // pages/AnalisisPage.jsx (halaman baru untuk menu Analisis)
 import React from "react";
+import useTitle from "../hooks/useTitle";
 
 const AnalisisPage = () => {
+  useTitle("Analisis - Insan");
   return (
     <div className="p-4">
       <h1 className="text-xl font-bold text-gray-800 mb-4">Analisis</h1>

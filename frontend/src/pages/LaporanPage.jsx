@@ -1,7 +1,8 @@
 // pages/LaporanPage.jsx (contoh halaman)
-import React from "react";
+import useTitle from "../hooks/useTitle";
 
 const LaporanPage = () => {
+  useTitle("Laporan - Insan");
   return (
     <div className="p-4">
       <h1 className="text-xl font-bold text-gray-800 mb-4">Laporan</h1>

@@ -1,5 +1,6 @@
 // pages/MingguanPage.jsx
 import React, { useState, useEffect, useRef } from "react";
+import useTitle from "../../hooks/useTitle";
 import {
   RefreshCw,
   BarChart3,
@@ -23,6 +24,7 @@ import AlertDialog from "../../components/Alert/AlertDialog";
 import { useAlert } from "../../hooks/useAlert";
 
 const MingguanPage = () => {
+  useTitle("Mingguan - Insan");
   const [formDataList, setFormDataList] = useState([]);
   const [filteredForms, setFilteredForms] = useState([]);
   const [selectedRows, setSelectedRows] = useState([]);
