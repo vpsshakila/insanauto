@@ -1,6 +1,8 @@
 // pages/MingguanPage.jsx
 import React, { useState, useEffect, useRef } from "react";
 import {
+  RefreshCw,
+  BarChart3,
   Calendar,
   Plus,
   X,
@@ -15,6 +17,7 @@ import { apiService } from "../../services/api";
 import MingguanCard from "../../components/Mingguan/MingguanCard";
 import ScheduleModal from "../../components/Mingguan/ScheduleModal";
 import JobsCard from "../../components/Mingguan/JobsCard";
+import StatisticsCard from "../../components/Mingguan/StatisticsCard";
 import FormDialog from "../../components/Mingguan/FormDialog";
 import AlertDialog from "../../components/Alert/AlertDialog";
 import { useAlert } from "../../hooks/useAlert";
@@ -445,6 +448,18 @@ const MingguanPage = () => {
 
             {/* Action Buttons di Pojok Kanan Atas */}
             <div className="flex items-center gap-2">
+              {activeTab === "statistics" && !selectionMode && (
+                <>
+                  {/* Refresh Button */}
+                  <button
+                    onClick={loadScheduledJobs}
+                    className="p-2 bg-[#F0C7A0] text-[#43172F] rounded-lg flex items-center justify-center hover:bg-[#F0C7A0]/90 transition-colors"
+                    aria-label="Refresh Statistics"
+                  >
+                    <RefreshCw size={18} />
+                  </button>
+                </>
+              )}
               {activeTab === "forms" && !selectionMode && (
                 <>
                   {/* Search Button untuk Forms */}
@@ -479,7 +494,6 @@ const MingguanPage = () => {
                   </button>
                 </>
               )}
-
               {activeTab === "jobs" && !selectionMode && (
                 <>
                   {/* Search Button untuk Jobs */}
@@ -689,6 +703,7 @@ const MingguanPage = () => {
                   </span>
                 </div>
               </button>
+
               <button
                 onClick={() => {
                   setActiveTab("jobs");
@@ -711,6 +726,30 @@ const MingguanPage = () => {
                   <span className="bg-[#43172F] text-white px-1.5 py-0.5 rounded-full text-xs">
                     {scheduledJobs.length}
                   </span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab("statistics");
+                  if (selectionMode) cancelSelection();
+                  if (showJobSearch) setShowJobSearch(false);
+                  if (showFormSearch) setShowFormSearch(false);
+                }}
+                className={`flex-1 rounded-md text-center transition-all duration-300 ease-in-out relative ${
+                  activeTab === "statistics" ? "text-[#43172F]" : "text-white"
+                }`}
+              >
+                <div
+                  className={`absolute inset-0 rounded-md transition-all duration-300 ease-in-out ${
+                    activeTab === "statistics"
+                      ? "bg-white shadow scale-100 opacity-100"
+                      : "scale-95 opacity-0"
+                  }`}
+                />
+                <div className="relative flex items-center justify-center gap-1.5 h-full">
+                  <BarChart3 size={16} className="text-current" />
+                  <span className="text-sm font-medium ml-1">Stats</span>
                 </div>
               </button>
             </div>
@@ -762,10 +801,18 @@ const MingguanPage = () => {
         )}
 
         {/* Main Content */}
-        <div className="p-4 pb-6">
+        <div className=" pb-6">
+          {activeTab === "statistics" && (
+            <div className="">
+              <StatisticsCard
+                jobs={scheduledJobs}
+                formTemplates={formDataList}
+              />
+            </div>
+          )}
           {/* Forms Tab Content */}
           {activeTab === "forms" && (
-            <div className="mb-6">
+            <div className=" p-4 mb-6">
               {/* Forms List */}
               {filteredForms.length === 0 ? (
                 <div className="bg-white rounded-xl p-6 text-center shadow">
@@ -806,7 +853,7 @@ const MingguanPage = () => {
 
           {/* Jobs Tab Content */}
           {activeTab === "jobs" && (
-            <div className="pb-14">
+            <div className="p-4 pb-14">
               {filteredJobs.length === 0 ? (
                 <div className="bg-white rounded-xl p-6 text-center shadow">
                   <div className="text-5xl mb-4">
