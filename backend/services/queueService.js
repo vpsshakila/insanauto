@@ -1,6 +1,6 @@
 // services/queueService.js
 const jobService = require("./jobService");
-const { submitToGoogleForm } = require("./playwrightService");
+const { submitToGoogleForm } = require("./puppeteerService");
 
 class QueueService {
   constructor() {

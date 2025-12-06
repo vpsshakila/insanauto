@@ -2,7 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const jobService = require("../services/jobService");
-const { submitToGoogleForm } = require("../services/playwrightService");
+const { submitToGoogleForm } = require("../services/puppeteerService");
 
 // Get all jobs
 router.get("/", async (req, res) => {

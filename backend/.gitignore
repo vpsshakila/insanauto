@@ -3,5 +3,4 @@ uploads/*
 !uploads/.gitkeep
 .env
 *.log
-browser-data/
 

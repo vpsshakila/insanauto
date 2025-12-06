@@ -2,7 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const jobService = require("../services/jobService");
-const { submitToGoogleForm } = require("../services/playwrightService");
+const { submitToGoogleForm } = require("../services/puppeteerService");
 
 // Submit form IMMEDIATELY (no schedule)
 router.post("/submit-now", async (req, res) => {
