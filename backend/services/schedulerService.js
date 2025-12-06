@@ -1,4 +1,3 @@
-// services/schedulerService.js
 const cron = require("node-cron");
 const jobService = require("./jobService");
 const queueService = require("./queueService");
@@ -8,10 +7,13 @@ class SchedulerService {
     this.isRunning = false;
     this.cronJob = null;
     this.isProcessing = false;
+    this.lastCheckTime = null;
+    this.checkInterval = "*/30 * * * * *"; // Setiap 30 detik untuk testing
+    // Untuk production: '* * * * *' // Setiap menit
   }
 
   /**
-   * Start scheduler - cek setiap menit untuk pending jobs
+   * Start scheduler
    */
   start() {
     if (this.isRunning) {
@@ -19,8 +21,10 @@ class SchedulerService {
       return;
     }
 
-    // Cron expression: setiap menit
-    this.cronJob = cron.schedule("* * * * *", async () => {
+    console.log(`⏰ Starting scheduler with interval: ${this.checkInterval}`);
+
+    // Cron expression: setiap 30 detik untuk testing
+    this.cronJob = cron.schedule(this.checkInterval, async () => {
       // Prevent concurrent processing
       if (this.isProcessing) {
         console.log("⏭️  Skipping - previous job still processing");
@@ -28,7 +32,12 @@ class SchedulerService {
       }
 
       this.isProcessing = true;
+      this.lastCheckTime = new Date();
+
       try {
+        console.log(
+          `\n[${this.lastCheckTime.toISOString()}] 🕐 Scheduler triggered`
+        );
         await this.processPendingJobs();
       } catch (error) {
         console.error("❌ Scheduler error:", error.message);
@@ -38,7 +47,13 @@ class SchedulerService {
     });
 
     this.isRunning = true;
-    console.log("✅ Scheduler started - checking every minute");
+    console.log("✅ Scheduler started");
+
+    // Process immediately on startup
+    setTimeout(() => {
+      console.log("🔧 Running initial job check...");
+      this.triggerProcessing();
+    }, 3000);
   }
 
   /**
@@ -53,23 +68,41 @@ class SchedulerService {
   }
 
   /**
-   * Process semua pending jobs yang waktunya sudah tiba
+   * Process pending jobs
    */
   async processPendingJobs() {
     try {
-      const pendingJobs = await jobService.getPendingJobs();
+      console.log("📊 Checking system status...");
 
-      if (!Array.isArray(pendingJobs)) {
-        console.error("❌ getPendingJobs did not return an array");
-        return;
+      // Cek koneksi database langsung
+      const database = require("../config/database");
+      if (!database.isConnected()) {
+        console.log("❌ Database not connected, attempting to reconnect...");
+        try {
+          await database.reconnect();
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+
+          if (!database.isConnected()) {
+            console.log("❌ Still not connected, skipping job processing");
+            return;
+          }
+        } catch (reconnectError) {
+          console.log("❌ Reconnect failed:", reconnectError.message);
+          return;
+        }
       }
 
+      // Skip stats check jika mau lebih cepat
+      // Langsung query pending jobs
+      const pendingJobs = await jobService.getPendingJobs();
+
       if (pendingJobs.length === 0) {
+        console.log("⏭️  No pending jobs to execute");
         return;
       }
 
       console.log(
-        `\n🔄 Found ${pendingJobs.length} pending job(s) ready to execute`
+        `🔄 Found ${pendingJobs.length} pending job(s) ready to execute`
       );
 
       // Process jobs sequentially using queue service
@@ -88,17 +121,31 @@ class SchedulerService {
     return {
       isRunning: this.isRunning,
       isProcessing: this.isProcessing,
+      lastCheckTime: this.lastCheckTime
+        ? this.lastCheckTime.toISOString()
+        : null,
+      checkInterval: this.checkInterval,
       queue: queueService.getStatus(),
       timestamp: new Date().toISOString(),
     };
   }
 
   /**
-   * Manually trigger job processing (for testing)
+   * Manually trigger job processing
    */
   async triggerProcessing() {
     console.log("🔧 Manually triggering job processing...");
-    await this.processPendingJobs();
+    if (this.isProcessing) {
+      console.log("⏭️  Skipping - scheduler is already processing");
+      return;
+    }
+
+    this.isProcessing = true;
+    try {
+      await this.processPendingJobs();
+    } finally {
+      this.isProcessing = false;
+    }
   }
 }
 
