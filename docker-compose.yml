@@ -1,44 +1,17 @@
-version: "3.8"
+version: "3.9"
 
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: ./backend
     container_name: backend
     restart: always
     environment:
       - TZ=Asia/Jakarta
-      - NODE_ENV=production
-      - HEADLESS=true
-      - DOCKER=true
-      - CHROMIUM_PATH=/usr/bin/chromium
-      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-      - SLOW_MO=50
-      - PLAYWRIGHT_TIMEOUT=90000
     env_file: ./backend/.env
     ports:
       - "5000:5000"
-    volumes:
-      - playwright_data:/root/.cache/ms-playwright
-      - browser_data:/app/browser-data
-      - app_logs:/app/logs
-      - screenshots:/app/logs/screenshots
     networks:
       - appnet
-    # Health check
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "require('http').get('http://localhost:5000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   frontend:
     build: ./frontend
@@ -48,16 +21,6 @@ services:
       - "5174:80"
     networks:
       - appnet
-    depends_on:
-      backend:
-        condition: service_healthy
-
-volumes:
-  playwright_data:
-  browser_data:
-  app_logs:
-  screenshots:
 
 networks:
   appnet:
-    driver: bridge
