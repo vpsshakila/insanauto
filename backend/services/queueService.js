@@ -11,22 +11,29 @@ class QueueService {
   /**
    * Execute jobs with same scheduled_time sequentially
    * Prevents concurrent Playwright instances
+   * FIXED: Update semua jobs ke "processing" SEBELUM execution dimulai
    */
   async processJobBatch(jobs) {
     if (jobs.length === 0) return;
 
     console.log(`\n🔄 Processing batch of ${jobs.length} job(s)...`);
 
+    // ✅ UPDATE SEMUA JOBS KE "PROCESSING" TERLEBIH DAHULU
+    const jobIds = jobs.map((j) => j.job_id);
+    await jobService.batchUpdateToProcessing(jobIds);
+    console.log(`✅ All ${jobs.length} jobs marked as processing\n`);
+
+    // Kemudian execute satu per satu
     for (let i = 0; i < jobs.length; i++) {
       const job = jobs[i];
-      console.log(`\n[${i + 1}/${jobs.length}] Processing: ${job.job_id}`);
+      console.log(`[${i + 1}/${jobs.length}] Processing: ${job.job_id}`);
 
       await this.executeJob(job);
 
       // Small delay between jobs to prevent resource issues
       if (i < jobs.length - 1) {
-        console.log("   ⏳ Waiting 2 seconds before next job...");
-        await this.sleep(2000);
+        console.log("   ⏳ Waiting 3 seconds before next job...");
+        await this.sleep(3000);
       }
     }
 
@@ -35,6 +42,7 @@ class QueueService {
 
   /**
    * Execute single job
+   * FIXED: Tidak perlu update ke "processing" lagi karena sudah di-batch update
    */
   async executeJob(job) {
     this.currentJob = job;
@@ -44,9 +52,6 @@ class QueueService {
     console.log(`   👤 Nama: ${job.nama}`);
 
     try {
-      // Update status ke "processing"
-      await jobService.updateJobStatus(job.job_id, "processing");
-
       // Siapkan form data
       const formData = {
         tid: job.tid,

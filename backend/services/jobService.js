@@ -54,15 +54,35 @@ class JobService {
 
   /**
    * Get pending jobs ready to execute
+   * FIXED: Tambahkan buffer 1 menit untuk menangkap semua jobs dengan waktu yang sama
    */
   async getPendingJobs() {
     try {
+      const now = new Date();
+      // Tambahkan buffer 1 menit ke depan untuk menangkap semua jobs
+      const bufferTime = new Date(now.getTime() + 60000);
+
       const jobs = await Job.find({
         status: "pending",
-        scheduled_time: { $lte: new Date() },
+        scheduled_time: {
+          $gte: new Date(now.getTime() - 60000), // 1 menit ke belakang
+          $lte: bufferTime, // 1 menit ke depan
+        },
       })
         .sort({ scheduled_time: 1 })
         .lean();
+
+      if (jobs.length > 0) {
+        console.log(`📊 Query time: ${now.toISOString()}`);
+        console.log(`📊 Found ${jobs.length} job(s):`);
+        jobs.forEach((job) => {
+          console.log(
+            `   - ${job.job_id} | Scheduled: ${new Date(
+              job.scheduled_time
+            ).toISOString()}`
+          );
+        });
+      }
 
       return jobs;
     } catch (error) {
@@ -76,15 +96,19 @@ class JobService {
    */
   async updateJobStatus(jobId, status, errorMessage = null) {
     try {
-      const job = await Job.findOneAndUpdate(
-        { job_id: jobId },
-        {
-          status: status,
-          executed_at: new Date(),
-          error_message: errorMessage,
-        },
-        { new: true }
-      );
+      const updateData = {
+        status: status,
+        error_message: errorMessage,
+      };
+
+      // Only set executed_at for final statuses
+      if (status === "completed" || status === "failed") {
+        updateData.executed_at = new Date();
+      }
+
+      const job = await Job.findOneAndUpdate({ job_id: jobId }, updateData, {
+        new: true,
+      });
 
       if (job) {
         console.log(`   📝 Job ${jobId} status: ${status}`);
@@ -93,6 +117,25 @@ class JobService {
       return job ? job.toObject() : null;
     } catch (error) {
       console.error("❌ Failed to update job status:", error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Batch update jobs to processing status
+   * NEW: Update semua jobs ke processing sebelum execution dimulai
+   */
+  async batchUpdateToProcessing(jobIds) {
+    try {
+      const result = await Job.updateMany(
+        { job_id: { $in: jobIds }, status: "pending" },
+        { status: "processing" }
+      );
+
+      console.log(`   📝 Updated ${result.modifiedCount} job(s) to processing`);
+      return result.modifiedCount;
+    } catch (error) {
+      console.error("❌ Failed to batch update jobs:", error.message);
       throw error;
     }
   }
