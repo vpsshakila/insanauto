@@ -61,7 +61,6 @@ class JobService {
             break;
 
           case "aggregate":
-            // Aggregate tidak support maxTimeMS(), gunakan timeout di level connection
             result = await Job.aggregate(query).exec();
             break;
 
@@ -82,7 +81,6 @@ class JobService {
           error.message
         );
 
-        // Jika timeout, throw error untuk handling di level atas
         if (
           error.name === "MongoServerSelectionError" ||
           error.name === "MongoNetworkError" ||
@@ -97,11 +95,10 @@ class JobService {
   }
 
   /**
-   * Get statistics - fixed version
+   * Get statistics
    */
   async getStats() {
     try {
-      // Cek koneksi dulu
       if (!database.isConnected()) {
         console.log("📊 Database not connected, returning default stats");
         return {
@@ -119,7 +116,6 @@ class JobService {
 
       console.log("📊 Getting statistics from database...");
 
-      // Method 1: Aggregate (tanpa maxTimeMS)
       const stats = await this.safeQuery("aggregate", [
         {
           $group: {
@@ -129,7 +125,6 @@ class JobService {
         },
       ]);
 
-      // Method 2: Fallback menggunakan countDocuments jika aggregate error
       if (!stats || !Array.isArray(stats)) {
         console.log("⚠️  Aggregate failed, using countDocuments instead");
         return await this.getStatsFallback();
@@ -159,7 +154,6 @@ class JobService {
     } catch (error) {
       console.error("❌ Failed to get stats via aggregate:", error.message);
 
-      // Fallback ke method yang lebih sederhana
       try {
         return await this.getStatsFallback();
       } catch (fallbackError) {
@@ -218,16 +212,38 @@ class JobService {
   }
 
   /**
-   * Add scheduled job
+   * Add scheduled job - FIXED: Better timezone handling
    */
   async addScheduledJob(formData, scheduledTime) {
     const jobId = `job_${Date.now()}_${Math.random()
       .toString(36)
       .substr(2, 9)}`;
-    const scheduleDate = new Date(scheduledTime);
 
-    if (scheduleDate <= new Date()) {
-      throw new Error("Scheduled time must be in the future");
+    // Parse scheduled time - handle both ISO string and Date object
+    let scheduleDate;
+    if (typeof scheduledTime === "string") {
+      scheduleDate = new Date(scheduledTime);
+    } else {
+      scheduleDate = new Date(scheduledTime);
+    }
+
+    const now = new Date();
+
+    console.log(`📅 Adding scheduled job:`);
+    console.log(`   Current time (UTC): ${now.toISOString()}`);
+    console.log(`   Current time (Local): ${now.toString()}`);
+    console.log(`   Scheduled time (UTC): ${scheduleDate.toISOString()}`);
+    console.log(`   Scheduled time (Local): ${scheduleDate.toString()}`);
+    console.log(
+      `   Difference: ${((scheduleDate - now) / 1000 / 60).toFixed(1)} minutes`
+    );
+
+    // FIXED: Tambah buffer minimal 1 menit untuk memastikan scheduler punya waktu
+    const minTime = new Date(now.getTime() + 60000); // 1 menit dari sekarang
+    if (scheduleDate < minTime) {
+      throw new Error(
+        `Scheduled time must be at least 1 minute in the future. Current: ${now.toISOString()}, Scheduled: ${scheduleDate.toISOString()}`
+      );
     }
 
     try {
@@ -245,7 +261,8 @@ class JobService {
       await job.save();
 
       console.log(`✅ Job added: ${jobId}`);
-      console.log(`   ⏰ Scheduled for: ${scheduleDate.toISOString()}`);
+      console.log(`   ⏰ Will execute at: ${scheduleDate.toISOString()} (UTC)`);
+      console.log(`   ⏰ Will execute at: ${scheduleDate.toString()} (Local)`);
 
       return job.toObject();
     } catch (error) {
@@ -255,17 +272,18 @@ class JobService {
   }
 
   /**
-   * Get pending jobs
+   * Get pending jobs - FIXED: Query dengan buffer time dan logging detail
    */
   async getPendingJobs() {
     try {
       const now = new Date();
-      const bufferTime = new Date(now.getTime() + 120000); // 2 menit ke depan
+      const bufferTime = new Date(now.getTime() + 60000); // 1 menit buffer
 
       console.log(`\n[${now.toISOString()}] 🔍 Querying pending jobs...`);
-      console.log(`   Query range: <= ${bufferTime.toISOString()}`);
+      console.log(`   Current time (UTC): ${now.toISOString()}`);
+      console.log(`   Current time (Local): ${now.toString()}`);
+      console.log(`   Buffer time: ${bufferTime.toISOString()}`);
 
-      // Cek dulu apakah database connected
       if (!database.isConnected()) {
         console.log(
           "   ⚠️  Database not connected, attempting to reconnect..."
@@ -279,6 +297,7 @@ class JobService {
         }
       }
 
+      // Query: scheduled_time sudah lewat + buffer 1 menit
       const jobs = await this.safeQuery(
         "find",
         {
@@ -295,19 +314,45 @@ class JobService {
       if (jobs.length > 0) {
         jobs.forEach((job, index) => {
           const scheduled = new Date(job.scheduled_time);
-          const diffSeconds = (scheduled - now) / 1000;
-          const timeText =
-            diffSeconds < 0
-              ? `${Math.abs(diffSeconds).toFixed(0)}s ago`
-              : `${diffSeconds.toFixed(0)}s from now`;
-          console.log(
-            `   ${index + 1}. ${job.job_id} (${
-              job.tid
-            }) - ${scheduled.toISOString()} (${timeText})`
-          );
+          const diffSeconds = (now - scheduled) / 1000;
+          const timeStatus =
+            diffSeconds > 0
+              ? `${Math.abs(diffSeconds).toFixed(0)}s overdue`
+              : `${Math.abs(diffSeconds).toFixed(0)}s early`;
+
+          console.log(`   ${index + 1}. ${job.job_id} (${job.tid})`);
+          console.log(`      Scheduled: ${scheduled.toISOString()} (UTC)`);
+          console.log(`      Scheduled: ${scheduled.toString()} (Local)`);
+          console.log(`      Status: ${timeStatus}`);
         });
       } else {
-        console.log("   ℹ️  No pending jobs found");
+        console.log("   ℹ️  No pending jobs ready to execute");
+
+        // Debug: Cek apakah ada pending jobs di masa depan
+        const futureJobs = await this.safeQuery(
+          "find",
+          {
+            status: "pending",
+            scheduled_time: { $gt: bufferTime },
+          },
+          {
+            sort: { scheduled_time: 1 },
+            limit: 3,
+          }
+        );
+
+        if (futureJobs.length > 0) {
+          console.log(`\n   🔮 Future pending jobs (${futureJobs.length}):`);
+          futureJobs.forEach((job, index) => {
+            const scheduled = new Date(job.scheduled_time);
+            const diffSeconds = (scheduled - now) / 1000;
+            console.log(
+              `      ${index + 1}. ${job.job_id} - in ${Math.ceil(
+                diffSeconds
+              )}s`
+            );
+          });
+        }
       }
 
       return jobs;
@@ -372,20 +417,23 @@ class JobService {
   }
 
   /**
-   * Batch update jobs to processing status
+   * Batch update jobs to processing status - FIXED: Tambah validasi
    */
   async batchUpdateToProcessing(jobIds) {
     try {
+      const now = new Date();
+
       const result = await this.safeQuery(
         "updateMany",
         {
           job_id: { $in: jobIds },
           status: "pending",
+          scheduled_time: { $lte: now }, // Pastikan hanya update yang sudah waktunya
         },
         {
           update: {
             status: "processing",
-            updated_at: new Date(),
+            updated_at: now,
           },
         }
       );
@@ -457,72 +505,6 @@ class JobService {
   }
 
   /**
-   * Get statistics
-   */
-  async getStats() {
-    try {
-      // Cek koneksi dulu
-      if (!database.isConnected()) {
-        return {
-          pending_count: 0,
-          processing_count: 0,
-          completed_count: 0,
-          failed_count: 0,
-          cancelled_count: 0,
-          total_count: 0,
-          database_connected: false,
-          error: "Database not connected",
-        };
-      }
-
-      const stats = await this.safeQuery("aggregate", [
-        {
-          $group: {
-            _id: "$status",
-            count: { $sum: 1 },
-          },
-        },
-      ]);
-
-      const result = {
-        pending_count: 0,
-        processing_count: 0,
-        completed_count: 0,
-        failed_count: 0,
-        cancelled_count: 0,
-        total_count: 0,
-        database_connected: true,
-        timestamp: new Date().toISOString(),
-      };
-
-      if (stats && Array.isArray(stats)) {
-        stats.forEach((stat) => {
-          const key = `${stat._id}_count`;
-          if (result.hasOwnProperty(key)) {
-            result[key] = stat.count;
-          }
-          result.total_count += stat.count;
-        });
-      }
-
-      return result;
-    } catch (error) {
-      console.error("❌ Failed to get stats:", error.message);
-      return {
-        pending_count: 0,
-        processing_count: 0,
-        completed_count: 0,
-        failed_count: 0,
-        cancelled_count: 0,
-        total_count: 0,
-        database_connected: false,
-        error: error.message,
-        timestamp: new Date().toISOString(),
-      };
-    }
-  }
-
-  /**
    * Cleanup old jobs
    */
   async cleanupOldJobs(daysOld = 30) {
@@ -539,6 +521,35 @@ class JobService {
       return result.deletedCount;
     } catch (error) {
       console.error("❌ Cleanup failed:", error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Reset failed jobs back to pending - NEW METHOD
+   */
+  async resetFailedJobs() {
+    try {
+      const result = await this.safeQuery(
+        "updateMany",
+        {
+          status: "failed",
+          scheduled_time: { $gte: new Date() }, // Hanya yang scheduled_time masih di masa depan
+        },
+        {
+          update: {
+            status: "pending",
+            error_message: null,
+            executed_at: null,
+            updated_at: new Date(),
+          },
+        }
+      );
+
+      console.log(`✅ Reset ${result.modifiedCount} failed job(s) to pending`);
+      return result.modifiedCount;
+    } catch (error) {
+      console.error("❌ Failed to reset jobs:", error.message);
       throw error;
     }
   }

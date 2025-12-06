@@ -2,6 +2,7 @@
 const { chromium } = require("playwright");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 require("dotenv").config();
 
 /**
@@ -11,9 +12,13 @@ async function submitToGoogleForm(formData) {
   const userDataDir = path.join(__dirname, "../browser-data");
   const logsDir = path.join(__dirname, "../logs");
 
-  // Ensure logs directory exists
+  // Ensure directories exist
   if (!fs.existsSync(logsDir)) {
     fs.mkdirSync(logsDir, { recursive: true });
+  }
+
+  if (!fs.existsSync(userDataDir)) {
+    fs.mkdirSync(userDataDir, { recursive: true });
   }
 
   // Config dari environment variables
@@ -36,13 +41,28 @@ async function submitToGoogleForm(formData) {
     perusahaan: formData.perusahaan,
   });
 
-  const browser = await chromium.launchPersistentContext(userDataDir, {
-    headless: config.HEADLESS,
-    slowMo: config.SLOW_MO,
-    args: config.BROWSER_ARGS,
-  });
+  // FIXED: Log browser info untuk debugging
+  console.log("🌐 Browser config:");
+  console.log(`   OS: ${os.platform()}`);
+  console.log(`   User data dir: ${userDataDir}`);
+  console.log(`   Headless: ${config.HEADLESS}`);
+
+  let browser = null;
 
   try {
+    // FIXED: Try-catch untuk handle browser launch error dengan lebih baik
+    console.log("🔧 Launching browser...");
+
+    browser = await chromium.launchPersistentContext(userDataDir, {
+      headless: config.HEADLESS,
+      slowMo: config.SLOW_MO,
+      args: config.BROWSER_ARGS,
+      // FIXED: Tambah timeout dan error handling
+      timeout: 30000,
+    });
+
+    console.log("✅ Browser launched successfully");
+
     const page = browser.pages()[0] || (await browser.newPage());
 
     // ========== BUKA GOOGLE FORM ==========
@@ -147,17 +167,29 @@ async function submitToGoogleForm(formData) {
   } catch (error) {
     console.error("❌ Error:", error.message);
 
+    // FIXED: Better error messages
+    let errorMessage = error.message;
+
+    if (error.message.includes("Executable doesn't exist")) {
+      errorMessage = `Playwright browser not found. Please run: npx playwright install chromium`;
+      console.error("\n💡 Solution:");
+      console.error("   Run: npx playwright install chromium");
+      console.error("   Then restart the server\n");
+    }
+
     // Screenshot untuk debugging
     try {
-      const pages = browser.pages();
-      if (pages.length > 0) {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const screenshotPath = path.join(
-          logsDir,
-          `error-${formData.tid}-${timestamp}.png`
-        );
-        await pages[0].screenshot({ path: screenshotPath, fullPage: true });
-        console.log("📸 Screenshot saved:", screenshotPath);
+      if (browser) {
+        const pages = browser.pages();
+        if (pages.length > 0) {
+          const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+          const screenshotPath = path.join(
+            logsDir,
+            `error-${formData.tid}-${timestamp}.png`
+          );
+          await pages[0].screenshot({ path: screenshotPath, fullPage: true });
+          console.log("📸 Screenshot saved:", screenshotPath);
+        }
       }
     } catch (screenshotError) {
       console.error("Failed to save screenshot:", screenshotError.message);
@@ -165,12 +197,14 @@ async function submitToGoogleForm(formData) {
 
     return {
       success: false,
-      message: error.message,
+      message: errorMessage,
       timestamp: new Date().toISOString(),
       data: formData,
     };
   } finally {
-    await browser.close();
+    if (browser) {
+      await browser.close();
+    }
   }
 }
 

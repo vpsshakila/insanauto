@@ -8,8 +8,7 @@ class SchedulerService {
     this.cronJob = null;
     this.isProcessing = false;
     this.lastCheckTime = null;
-    this.checkInterval = "*/30 * * * * *"; // Setiap 30 detik untuk testing
-    // Untuk production: '* * * * *' // Setiap menit
+    this.checkInterval = "* * * * *"; // FIXED: Setiap 1 menit (production ready)
   }
 
   /**
@@ -22,8 +21,9 @@ class SchedulerService {
     }
 
     console.log(`⏰ Starting scheduler with interval: ${this.checkInterval}`);
+    console.log("   Checking every 1 minute for pending jobs");
 
-    // Cron expression: setiap 30 detik untuk testing
+    // FIXED: Cron expression setiap 1 menit
     this.cronJob = cron.schedule(this.checkInterval, async () => {
       // Prevent concurrent processing
       if (this.isProcessing) {
@@ -49,11 +49,8 @@ class SchedulerService {
     this.isRunning = true;
     console.log("✅ Scheduler started");
 
-    // Process immediately on startup
-    setTimeout(() => {
-      console.log("🔧 Running initial job check...");
-      this.triggerProcessing();
-    }, 3000);
+    // FIXED: Tidak langsung process on startup, tunggu scheduled_time
+    console.log("💡 Scheduler will check for pending jobs every minute");
   }
 
   /**
@@ -68,13 +65,12 @@ class SchedulerService {
   }
 
   /**
-   * Process pending jobs
+   * Process pending jobs - FIXED: Validasi time lebih ketat
    */
   async processPendingJobs() {
     try {
       console.log("📊 Checking system status...");
 
-      // Cek koneksi database langsung
       const database = require("../config/database");
       if (!database.isConnected()) {
         console.log("❌ Database not connected, attempting to reconnect...");
@@ -92,12 +88,11 @@ class SchedulerService {
         }
       }
 
-      // Skip stats check jika mau lebih cepat
-      // Langsung query pending jobs
+      // Get pending jobs yang sudah waktunya
       const pendingJobs = await jobService.getPendingJobs();
 
       if (pendingJobs.length === 0) {
-        console.log("⏭️  No pending jobs to execute");
+        console.log("⏭️  No pending jobs ready to execute");
         return;
       }
 
@@ -105,8 +100,22 @@ class SchedulerService {
         `🔄 Found ${pendingJobs.length} pending job(s) ready to execute`
       );
 
-      // Process jobs sequentially using queue service
-      await queueService.processJobBatch(pendingJobs);
+      // FIXED: Validasi sekali lagi sebelum process
+      const now = new Date();
+      const jobsToProcess = pendingJobs.filter((job) => {
+        const scheduledTime = new Date(job.scheduled_time);
+        return scheduledTime <= now;
+      });
+
+      if (jobsToProcess.length === 0) {
+        console.log("⏭️  No jobs have reached their scheduled time yet");
+        return;
+      }
+
+      console.log(`✅ Processing ${jobsToProcess.length} job(s)...`);
+
+      // Process jobs using queue service
+      await queueService.processJobBatch(jobsToProcess);
 
       console.log("✅ All pending jobs processed\n");
     } catch (error) {
@@ -125,6 +134,9 @@ class SchedulerService {
         ? this.lastCheckTime.toISOString()
         : null,
       checkInterval: this.checkInterval,
+      nextCheck: this.isRunning
+        ? new Date(Date.now() + 60000).toISOString()
+        : null,
       queue: queueService.getStatus(),
       timestamp: new Date().toISOString(),
     };
