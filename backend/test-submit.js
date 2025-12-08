@@ -1,4 +1,5 @@
-const { submitToGoogleForm } = require("./services/playwrightService");
+// test-submit.js
+const { submitToGoogleForm } = require("./services/puppeteerService");
 
 async function testSubmit() {
   const testData = {
@@ -12,7 +13,7 @@ async function testSubmit() {
 
   console.log("🧪 Testing form submission...");
   const result = await submitToGoogleForm(testData);
-  console.log("📊 Result:", result);
+  console.log("📊 Result:", JSON.stringify(result, null, 2));
 }
 
-testSubmit();
+testSubmit().catch(console.error);
