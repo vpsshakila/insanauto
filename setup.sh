@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# setup.sh - Auto setup script for Proxmox deployment
-# Usage: bash setup.sh
-
+# setup.sh - Updated for /opt/apps/insanauto
 set -e
 
 echo "🚀 InsanAuto - Proxmox Setup Script"
@@ -13,7 +11,10 @@ echo ""
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
+
+# Define project directory
+PROJECT_DIR="/opt/apps/insanauto"
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 
@@ -45,13 +46,17 @@ docker-compose --version
 echo ""
 
 # Navigate to project directory
-if [ ! -d "/apps/insanauto" ]; then
-    echo -e "${RED}❌ Project directory not found: /apps/insanauto${NC}"
-    echo "   Please clone the repository first"
+if [ ! -d "$PROJECT_DIR" ]; then
+    echo -e "${RED}❌ Project directory not found: $PROJECT_DIR${NC}"
+    echo ""
+    echo "To create:"
+    echo "  sudo mkdir -p /opt/apps"
+    echo "  sudo mv ~/apps/insanauto /opt/apps/"
+    echo ""
     exit 1
 fi
 
-cd /apps/insanauto
+cd "$PROJECT_DIR"
 
 # Check if git repo
 if [ ! -d ".git" ]; then
@@ -84,8 +89,8 @@ HEADLESS=true
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Session Configuration
-# (Optional)
+# Timezone
+TZ=Asia/Jakarta
 EOF
     
     echo -e "${GREEN}✅ .env created${NC}"
@@ -179,15 +184,18 @@ echo "=================================="
 echo -e "${GREEN}✅ Setup Complete!${NC}"
 echo "=================================="
 echo ""
+echo "📍 Project Location: $PROJECT_DIR"
+echo ""
 echo "📋 Next Steps:"
 echo ""
 echo "1. 🔐 Login to Google (First time only):"
 echo "   - Connect VNC to: ${SERVER_IP}:5900"
-echo "   - Run: docker-compose exec backend node scripts/login.js"
+echo "   - Run: cd /opt/apps/insanauto && docker-compose exec backend node scripts/login.js"
 echo "   - Login in VNC browser"
 echo "   - Press Ctrl+C when done"
 echo ""
 echo "2. ✅ Verify Setup:"
+echo "   cd /opt/apps/insanauto"
 echo "   docker-compose exec backend bash scripts/check-session.sh"
 echo ""
 echo "3. 🧪 Test Submission:"
@@ -199,9 +207,9 @@ echo "   - Frontend: http://${SERVER_IP}:5174"
 echo "   - VNC: ${SERVER_IP}:5900"
 echo ""
 echo "📚 View Logs:"
-echo "   docker-compose logs -f backend"
+echo "   cd /opt/apps/insanauto && docker-compose logs -f backend"
 echo ""
 echo "🔄 Restart Services:"
-echo "   docker-compose restart"
+echo "   cd /opt/apps/insanauto && docker-compose restart"
 echo ""
 echo "=================================="
