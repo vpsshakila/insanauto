@@ -7,11 +7,23 @@ services:
     restart: always
     environment:
       - TZ=Asia/Jakarta
-    env_file: ./backend/.env
+      - DISPLAY=:99
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    env_file:
+      - ./backend/.env
     ports:
-      - "5000:5000"
+      - "5000:5000" # API
+      - "5900:5900" # VNC for login
+    volumes:
+      - ./backend/browser-data:/app/browser-data # Persist Google session
+      - ./backend/logs:/app/logs # Error screenshots
     networks:
       - appnet
+    # Add security options for Chromium
+    security_opt:
+      - seccomp:unconfined
+    shm_size: "2gb" # Increase shared memory for Chromium
 
   frontend:
     build: ./frontend
@@ -21,6 +33,8 @@ services:
       - "5174:80"
     networks:
       - appnet
+    depends_on:
+      - backend
 
 networks:
   appnet:
