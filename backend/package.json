@@ -5,6 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
+    "login": "node scripts/login.js",
+    "keep-alive": "node scripts/keep-alive.js",
+    "test-session": "node scripts/test-session.js",
     "dev": "nodemon server.js"
   },
   "keywords": [],

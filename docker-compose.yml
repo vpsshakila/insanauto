@@ -14,16 +14,37 @@ services:
       - ./backend/.env
     ports:
       - "5000:5000" # API
-      - "5900:5900" # VNC for login
+      - "5900:5900" # VNC
     volumes:
-      - ./backend/browser-data:/app/browser-data # Persist Google session
-      - ./backend/logs:/app/logs # Error screenshots
+      - ./backend/browser-data:/app/browser-data # IMPORTANT: Persistent session
+      - ./backend/logs:/app/logs
+      - ./backend/scripts:/app/scripts
     networks:
       - appnet
-    # Add security options for Chromium
     security_opt:
       - seccomp:unconfined
-    shm_size: "2gb" # Increase shared memory for Chromium
+    shm_size: "2gb"
+
+  # Keep-alive service (separate container)
+  session-keeper:
+    build: ./backend
+    container_name: session-keeper
+    restart: always
+    environment:
+      - DISPLAY=:99
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    volumes:
+      - ./backend/browser-data:/app/browser-data # SHARED with backend
+      - ./backend/scripts:/app/scripts
+    networks:
+      - appnet
+    security_opt:
+      - seccomp:unconfined
+    shm_size: "2gb"
+    command: node scripts/keep-alive.js
+    depends_on:
+      - backend
 
   frontend:
     build: ./frontend

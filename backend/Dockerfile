@@ -1,6 +1,7 @@
-FROM node:18-bullseye
+# Node 24 dengan bullseye (JANGAN pakai alpine, chromium tidak support)
+FROM node:24-bullseye
 
-# Install Chrome, VNC, and dependencies
+# Install Chromium, VNC, dan dependencies
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-sandbox \
@@ -22,30 +23,31 @@ RUN apt-get update && apt-get install -y \
     libxcomposite1 \
     libxdamage1 \
     libxrandr2 \
+    libgbm1 \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Puppeteer to use system Chromium
+# Set environment variables
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
-    DISPLAY=:99
+    DISPLAY=:99 \
+    NODE_ENV=production
 
-# Create app directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install Node.js dependencies
+RUN npm install --production
 
 # Copy application code
 COPY . .
 
-# Create directories for volumes
-RUN mkdir -p /app/browser-data /app/logs
+# Create necessary directories
+RUN mkdir -p /app/browser-data /app/logs /var/log/supervisor
 
-# Copy supervisor config
+# Copy supervisor configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Expose ports

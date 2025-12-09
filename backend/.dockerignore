@@ -1,0 +1,4 @@
+node_modules;
+npm - debug.log.git.gitignore.env.local;
+browser - data;
+logs.vscode.idea;
